@@ -1,0 +1,485 @@
+import { and, asc, db, eq, lte, sql } from "@repo/database";
+import {
+  recurringRuleOccurrences,
+  recurringRules,
+  spaces,
+  type SelectRecurringRule,
+} from "@repo/database/schema";
+import {
+  ServiceError,
+  isCheckViolation,
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from "../lib/errors";
+import { parseInput } from "../lib/schema";
+import { assertActiveSpaceMember } from "../space";
+import { createTransaction, type TransactionListItem } from "../transaction";
+import {
+  computeNextRunDate,
+  type RecurringFrequency,
+} from "./schedule";
+import {
+  createRuleInputSchema,
+  listRulesInputSchema,
+  ruleLookupSchema,
+  updateRuleStatusSchema,
+  type CreateRuleInput,
+  type ListRulesInput,
+  type RecurringRuleListItem,
+  type RuleLog,
+  type RuleSplitConfig,
+  type RuleSplitConfigNormalized,
+} from "./model";
+
+/**
+ * Recurring service — schedule ownership + lazy catch-up execution.
+ *
+ * A rule is a template (type + amount + schedule). Occurrences produce normal
+ * transactions through the transaction service, plus one log row per
+ * scheduled date (`recurring_rule_logs` is unique per rule+date, so catch-up
+ * is idempotent — safe to run on every app load).
+ *
+ * Execution model (per grilling-session Q11: lazy catch-up now, scheduler
+ * later — both call `runDueRules`):
+ *   - `autoPost: true`  -> occurrences post automatically when due
+ *   - `autoPost: false` -> occurrences create only a "skipped" log row and
+ *                          the rule keeps advancing; UI can remind
+ */
+
+/**
+ * Normalize the stored split config (optional fields, possibly-null share
+ * values) into the stable client shape (every field explicitly null).
+ */
+const toSplitConfigNormalized = (
+  raw: RuleSplitConfig | null,
+): RuleSplitConfigNormalized | null => {
+  if (raw == null) return null;
+  return {
+    title: raw.title,
+    participants: raw.participants.map((p) => ({
+      userId: p.userId ?? null,
+      contactId: p.contactId ?? null,
+      name: p.name ?? null,
+      shareType: p.shareType,
+      shareValue: p.shareValue ?? null,
+    })),
+  };
+};
+
+const toRuleListItem = (row: SelectRecurringRule): RecurringRuleListItem => ({
+  id: row.id,
+  spaceId: row.spaceId,
+  createdBy: row.createdBy,
+  accountId: row.accountId,
+  destinationAccountId: row.destinationAccountId,
+  categoryId: row.categoryId,
+  merchantId: row.merchantId,
+  type: row.type === "split_expense" ? "expense" : row.type,
+  amount: row.amount,
+  currency: row.currency,
+  description: row.description ?? "",
+  frequency: row.frequency,
+  interval: row.interval,
+  dayOfWeek: row.dayOfWeek,
+  dayOfMonth: row.dayOfMonth,
+  autoPost: row.autoPost,
+  remindDaysBefore: row.remindDaysBefore,
+  splitConfig: toSplitConfigNormalized(
+    (row.splitConfig as RuleSplitConfig | null) ?? null,
+  ),
+  startDate: row.startDate,
+  nextRunDate: row.nextRunDate,
+  endDate: row.endDate,
+  status: row.status,
+  lastRunAt: row.lastRunAt,
+});
+
+// ---------------------------------------------------------------------------
+// Create
+// ---------------------------------------------------------------------------
+
+export async function createRule(input: CreateRuleInput): Promise<RecurringRuleListItem> {
+  const parsed = parseInput(createRuleInputSchema, input, "createRule input");
+  const {
+    spaceId,
+    actorUserId,
+    type,
+    amount,
+    description,
+    schedule,
+    accountId,
+    destinationAccountId,
+    categoryId,
+    merchantId,
+    currency,
+    startDate,
+    endDate,
+    autoPost,
+    remindDaysBefore,
+    splitConfig,
+  } = parsed;
+
+  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+
+  // A recurring split is an expense split across participants on every
+  // occurrence; other types have nothing to allocate.
+  if (splitConfig != null && type !== "expense") {
+    throw new ServiceError(
+      "VALIDATION_ERROR",
+      "A recurring split requires the expense type",
+    );
+  }
+  if (splitConfig != null && !(autoPost ?? false)) {
+    throw new ServiceError(
+      "VALIDATION_ERROR",
+      "A recurring split needs auto-post on — reminders alone can't create the participants' debts",
+    );
+  }
+
+  // Currency defaults to the space's base currency (rate = 1 world).
+  let effectiveCurrency = currency;
+  if (effectiveCurrency == null) {
+    const [space] = await db
+      .select({ baseCurrency: spaces.baseCurrency })
+      .from(spaces)
+      .where(eq(spaces.id, spaceId))
+      .limit(1);
+    if (!space) {
+      throw new ServiceError("NOT_FOUND", "Space not found");
+    }
+    effectiveCurrency = space.baseCurrency;
+  }
+
+  const willAutoPost = autoPost ?? false;
+  if (willAutoPost && accountId == null) {
+    throw new ServiceError(
+      "VALIDATION_ERROR",
+      "Auto-post requires an account — pick an account or turn auto-post off",
+    );
+  }
+
+  const start = startDate ?? new Date().toISOString().slice(0, 10);
+  if (endDate != null && endDate < start) {
+    throw new ServiceError("VALIDATION_ERROR", "End date must be on or after the start date");
+  }
+
+  // The first occurrence is the start date itself; the next run is computed
+  // from it. (The start occurrence is NOT auto-created — the caller's
+  // transaction flow records the first transaction explicitly.)
+  const nextRun = computeNextRunDate({
+    frequency: schedule.frequency,
+    interval: schedule.interval,
+    dayOfWeek: schedule.dayOfWeek ?? null,
+    dayOfMonth: schedule.dayOfMonth ?? null,
+    fromDate: start,
+    inclusive: false,
+  });
+
+  try {
+    // The DB CHECK requires split_config only when type = 'split_expense'.
+    // The API accepts type='expense' + splitConfig (UI convention); store the
+    // canonical split_expense type and map back to 'expense' when posting.
+    const storedType = splitConfig != null ? "split_expense" : type;
+    const [row] = await db
+      .insert(recurringRules)
+      .values({
+        spaceId,
+        createdBy: actorUserId,
+        accountId: accountId ?? null,
+        destinationAccountId: destinationAccountId ?? null,
+        categoryId: categoryId ?? null,
+        merchantId: merchantId ?? null,
+        type: storedType,
+        amount,
+        currency: effectiveCurrency,
+        description,
+        frequency: schedule.frequency,
+        interval: schedule.interval,
+        dayOfWeek: schedule.dayOfWeek ?? null,
+        dayOfMonth: schedule.dayOfMonth ?? null,
+        autoPost: willAutoPost,
+        remindDaysBefore: remindDaysBefore ?? null,
+        splitConfig: splitConfig ?? null,
+        version: 1,
+        startDate: start,
+        nextRunDate: nextRun,
+        endDate: endDate ?? null,
+        status: "active",
+        notes: null,
+      })
+      .returning();
+
+    if (!row) {
+      throw new ServiceError("INVALID_STATE", "Failed to create recurring rule");
+    }
+    return toRuleListItem(row);
+  } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      throw new ServiceError("VALIDATION_ERROR", "Invalid space, account or category reference");
+    }
+    if (isCheckViolation(error)) {
+      throw new ServiceError("VALIDATION_ERROR", "Recurring rule violates a schedule constraint");
+    }
+    throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Read
+// ---------------------------------------------------------------------------
+
+export async function listRules(
+  input: ListRulesInput,
+): Promise<RecurringRuleListItem[]> {
+  const parsed = parseInput(listRulesInputSchema, input, "listRules input");
+  const { spaceId, actorUserId, status } = parsed;
+  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+
+  const conditions = [eq(recurringRules.spaceId, spaceId)];
+  if (status != null) {
+    conditions.push(eq(recurringRules.status, status));
+  }
+
+  const rows = await db
+    .select()
+    .from(recurringRules)
+    .where(and(...conditions))
+    .orderBy(asc(recurringRules.nextRunDate));
+
+  return rows.map(toRuleListItem);
+}
+
+// ---------------------------------------------------------------------------
+// Status transitions
+// ---------------------------------------------------------------------------
+
+async function loadRuleForActor(ruleId: string, actorUserId: string) {
+  const [row] = await db
+    .select()
+    .from(recurringRules)
+    .where(eq(recurringRules.id, ruleId))
+    .limit(1);
+  if (!row) {
+    throw new ServiceError("NOT_FOUND", "Recurring rule not found");
+  }
+  await assertActiveSpaceMember({ spaceId: row.spaceId, userId: actorUserId });
+  if (row.createdBy !== actorUserId) {
+    throw new ServiceError("FORBIDDEN", "Only the rule creator can manage this rule");
+  }
+  return row;
+}
+
+export async function updateRuleStatus(
+  input: unknown,
+): Promise<RecurringRuleListItem> {
+  const parsed = parseInput(updateRuleStatusSchema, input, "updateRuleStatus input");
+  const { ruleId, actorUserId, status } = parsed;
+
+  const row = await loadRuleForActor(ruleId, actorUserId);
+  if (row.status === "cancelled") {
+    throw new ServiceError("INVALID_STATE", "A cancelled rule cannot be reactivated");
+  }
+  if (row.status === "completed") {
+    throw new ServiceError("INVALID_STATE", "A completed rule cannot be reactivated");
+  }
+
+  const [updated] = await db
+    .update(recurringRules)
+    .set({ status })
+    .where(eq(recurringRules.id, ruleId))
+    .returning();
+
+  if (!updated) {
+    throw new ServiceError("INVALID_STATE", "Failed to update recurring rule");
+  }
+  return toRuleListItem(updated);
+}
+
+// ---------------------------------------------------------------------------
+// Logs
+// ---------------------------------------------------------------------------
+
+export async function listRuleLogs(ruleId: string): Promise<RuleLog[]> {
+  const rows = await db
+    .select()
+    .from(recurringRuleOccurrences)
+    .where(eq(recurringRuleOccurrences.ruleId, ruleId))
+    .orderBy(asc(recurringRuleOccurrences.scheduledFor));
+
+  return rows
+    .filter(
+      (row): row is typeof row & { status: "success" | "skipped" | "failed" } =>
+        row.status === "success" ||
+        row.status === "skipped" ||
+        row.status === "failed",
+    )
+    .map((row) => ({
+      id: row.id,
+      ruleId: row.ruleId,
+      transactionId: row.transactionId,
+      scheduledFor: row.scheduledFor,
+      status: row.status,
+      errorMessage: row.errorMessage,
+    }));
+}
+
+// ---------------------------------------------------------------------------
+// Lazy catch-up execution
+// ---------------------------------------------------------------------------
+
+/**
+ * Post (or log) every occurrence that has come due for the given space's
+ * active auto-post rules. Idempotent: `recurring_rule_logs` has a unique
+ * (ruleId, scheduledFor) index, so a re-run never double-posts.
+ *
+ * Called from the tRPC recurring router (`catchUp`) and safe to call on every
+ * app load; a background scheduler can call the same function later.
+ */
+export async function runDueRules(input: {
+  spaceId: string;
+  actorUserId: string;
+}): Promise<{ posted: number; logged: number; failed: number }> {
+  const { spaceId, actorUserId } = input;
+  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const due = await db
+    .select()
+    .from(recurringRules)
+    .where(
+      and(
+        eq(recurringRules.spaceId, spaceId),
+        eq(recurringRules.status, "active"),
+        eq(recurringRules.autoPost, true),
+        lte(recurringRules.nextRunDate, today),
+      ),
+    );
+
+  let posted = 0;
+  let logged = 0;
+  let failed = 0;
+
+  for (const rule of due) {
+    // Advance one occurrence at a time so a rule that was offline for months
+    // catches up date by date, each with its own log row.
+    let guard = 0;
+    while (rule.nextRunDate <= today && guard < 100) {
+      guard += 1;
+      const scheduledFor = rule.nextRunDate;
+
+      // 1. Occurrence row first (unique per rule+date) — makes the run
+      // idempotent.
+      const inserted = await db
+        .insert(recurringRuleOccurrences)
+        .values({
+          ruleId: rule.id,
+          spaceId,
+          ruleVersion: rule.version,
+          transactionId: null,
+          scheduledFor,
+          status: "skipped",
+          skippedReason: "auto-post pending",
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      if (inserted.length === 0) {
+        // Someone already processed this occurrence (concurrent tab/re-run).
+        rule.nextRunDate = computeNextRunDate({
+          frequency: rule.frequency as RecurringFrequency,
+          interval: rule.interval,
+          dayOfWeek: rule.dayOfWeek,
+          dayOfMonth: rule.dayOfMonth,
+          fromDate: scheduledFor,
+          inclusive: false,
+        });
+        continue;
+      }
+
+      try {
+        const transaction: TransactionListItem = await createTransaction({
+          spaceId,
+          actorUserId: rule.createdBy,
+          type: rule.type === "split_expense" ? "expense" : rule.type,
+          amount: Number(rule.amount),
+          date: scheduledFor,
+          accountId: rule.accountId,
+          destinationAccountId: rule.destinationAccountId,
+          categoryId: rule.categoryId,
+          merchantId: rule.merchantId,
+          currency: rule.currency,
+          description: rule.description,
+          notes: null,
+          recurringRuleId: rule.id,
+          billSplit:
+            (rule.splitConfig as RuleSplitConfig | null) != null
+              ? {
+                  title: (rule.splitConfig as RuleSplitConfig).title,
+                  participants: (rule.splitConfig as RuleSplitConfig).participants,
+                }
+              : null,
+        });
+
+        await db
+          .update(recurringRuleOccurrences)
+          .set({
+            status: "success",
+            transactionId: transaction.id,
+            executedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(recurringRuleOccurrences.ruleId, rule.id),
+              eq(recurringRuleOccurrences.scheduledFor, scheduledFor),
+            ),
+          );
+        posted += 1;
+      } catch (error) {
+        failed += 1;
+        await db
+          .update(recurringRuleOccurrences)
+          .set({
+            status: "failed",
+            errorMessage: error instanceof Error ? error.message : "Unknown error",
+            attemptCount: sql`${recurringRuleOccurrences.attemptCount} + 1`,
+            lastAttemptAt: new Date(),
+            executedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(recurringRuleOccurrences.ruleId, rule.id),
+              eq(recurringRuleOccurrences.scheduledFor, scheduledFor),
+            ),
+          );
+      }
+
+      // 2. Advance the rule; complete it when past its end date.
+      const nextRun = computeNextRunDate({
+        frequency: rule.frequency as RecurringFrequency,
+        interval: rule.interval,
+        dayOfWeek: rule.dayOfWeek,
+        dayOfMonth: rule.dayOfMonth,
+        fromDate: scheduledFor,
+        inclusive: false,
+      });
+
+      const completed = rule.endDate != null && nextRun > rule.endDate;
+      await db
+        .update(recurringRules)
+        .set({
+          nextRunDate: nextRun,
+          lastRunAt: new Date(),
+          status: completed ? "completed" : rule.status,
+        })
+        .where(eq(recurringRules.id, rule.id));
+
+      rule.nextRunDate = nextRun;
+      if (completed) break;
+    }
+  }
+
+  return { posted, logged, failed };
+}
+
+
