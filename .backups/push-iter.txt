@@ -1,0 +1,149 @@
+No config path provided, using default 'drizzle.config.ts'
+Reading config file 'C:\Users\JAGDEEP\Desktop\✅Projects\ledgr\packages\database\drizzle.config.ts'
+Reading schema files:
+C:\Users\JAGDEEP\Desktop\✅Projects\ledgr\packages\database\schema.ts
+
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+[2K[1G[⣯] Pulling schema from database...
+[2K[1G[✓] Pulling schema from database...
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ financial_accounts_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ category_groups_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ categories_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ merchants_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ transactions_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ tags_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ budgets_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ goals_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ import_batches_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ dashboard_layouts_user_unique unique will be created
+--- all unique conflicts resolved ---
+
++ category_groups_user_name_unique index will be created
+--- all index conflicts resolved ---
+
++ categories_user_template_key_unique index will be created
++ categories_user_name_type_unique index will be created
+--- all index conflicts resolved ---
+
++ merchants_user_normalized_name_unique index will be created
+--- all index conflicts resolved ---
+
++ merchant_aliases_user_match_pattern_unique index will be created
+--- all index conflicts resolved ---
+
++ transactions_user_date_idx index will be created
++ transactions_user_account_date_idx index will be created
+--- all index conflicts resolved ---
+
++ tags_user_name_unique index will be created
+--- all index conflicts resolved ---
+
++ budgets_user_category_idx index will be created
++ budgets_user_archived_idx index will be created
+--- all index conflicts resolved ---
+
++ goal_contributions_user_idx index will be created
+--- all index conflicts resolved ---
+
++ recurring_rules_id_user_id_unique index will be created
+--- all index conflicts resolved ---
+
++ audit_logs_actor_created_at_idx index will be created
+--- all index conflicts resolved ---
+
++ daily_account_summary_user_account_date_unique index will be created
+--- all index conflicts resolved ---
+
++ financial_snapshots_user_date_unique index will be created
+--- all index conflicts resolved ---
+
++ analytics_events_user_occurred_at_idx index will be created
+--- all index conflicts resolved ---
+
+
+┌── query error: cannot drop constraint financial_accounts_id_space_id_unique on table financial_accounts because other objects depend on it
+
+ALTER TABLE "financial_accounts" DROP CONSTRAINT "financial_accounts_id_space_id_unique";
+└──

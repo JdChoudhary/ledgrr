@@ -38,7 +38,6 @@ import {
  * - Categories exist but search misses → "No categories found"
  */
 type Props = {
-  spaceId: string;
   value: string | null;
   onValueChange: (categoryId: string | null) => void;
   /** Restrict to one category type (e.g. expense for budgets). */
@@ -51,7 +50,6 @@ type Props = {
 };
 
 export function CategoryCombobox({
-  spaceId,
   value,
   onValueChange,
   type,
@@ -63,9 +61,7 @@ export function CategoryCombobox({
 }: Props) {
   const [query, setQuery] = React.useState("");
 
-  const { items, data, isPending } = useCategoryOptions(
-    spaceId ? { spaceId, ...(type ? { type } : {}) } : undefined,
-  );
+  const { items, data, isPending } = useCategoryOptions(type ? { type } : {});
 
   const selected = items.find((item) => item.id === value) ?? null;
   const groups = data?.categoryGroups ?? [];

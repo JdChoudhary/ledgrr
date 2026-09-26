@@ -38,9 +38,9 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 
-import { useSpaces } from "~/hooks/api/space";
 import { useCategories, useCreateCategory } from "~/hooks/api/category";
 import { useCreateBudget } from "~/hooks/api/budget";
+import { useUserSettings } from "~/hooks/api/user-settings";
 
 const PERIOD_OPTIONS = [
   { value: "weekly", label: "Weekly" },
@@ -87,13 +87,10 @@ export function SetBudgetDialog() {
     amount?: string;
   }>({});
 
-  const spaces = useSpaces(open ? {} : undefined);
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
+  const { userSettings } = useUserSettings(open ? {} : undefined);
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const categories = useCategories(
-    spaceId ? { spaceId, type: "expense" } : undefined,
-  );
+  const categories = useCategories(open ? { type: "expense" } : undefined);
 
   const items = React.useMemo<CategoryOption[]>(
     () =>
@@ -122,7 +119,7 @@ export function SetBudgetDialog() {
   );
 
   const canCreate =
-    trimmedQuery.length > 0 && !exactMatch && !categories.isFetching && !!spaceId;
+    trimmedQuery.length > 0 && !exactMatch && !categories.isFetching;
 
   const { createCategory, isPending: createCategoryPending } = useCreateCategory({
     onSuccess: async (created) => {
@@ -158,8 +155,8 @@ export function SetBudgetDialog() {
   };
 
   const handleCreateCategory = () => {
-    if (!spaceId || !canCreate) return;
-    createCategory({ spaceId, name: trimmedQuery, type: "expense" });
+    if (!canCreate) return;
+    createCategory({ name: trimmedQuery, type: "expense" });
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -172,10 +169,9 @@ export function SetBudgetDialog() {
     }
     setErrors(next);
 
-    if (!selected || !spaceId || Object.keys(next).length > 0) return;
+    if (!selected || Object.keys(next).length > 0) return;
 
     createBudget({
-      spaceId,
       categoryId: selected.value,
       periodType,
       startsOn,
@@ -277,7 +273,7 @@ export function SetBudgetDialog() {
             <FieldLabel>Limit amount</FieldLabel>
             <InputGroup>
               <InputGroupAddon align="inline-start">
-                {space?.baseCurrency ?? "USD"}
+                {currency}
               </InputGroupAddon>
               <InputGroupInput
                 inputMode="decimal"
@@ -337,7 +333,7 @@ export function SetBudgetDialog() {
           <Button
             type="submit"
             form={FORM_ID}
-            disabled={createBudgetPending || !spaceId}
+            disabled={createBudgetPending}
           >
             {createBudgetPending && (
               <Loader2Icon className="animate-spin" />

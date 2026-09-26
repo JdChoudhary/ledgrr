@@ -11,11 +11,10 @@ import {
 /**
  * Input contracts for the financial account service.
  *
- * Every account belongs to exactly one space:
+ * Every account belongs to exactly one user:
  *
- *   personal account   -> the space's single member
- *   shared account     -> space members govern access
- *   restricted account -> space role is an upper bound, account_grants narrow it
+ *   personal account   -> visible to its owner
+ *   restricted account -> account_grants grant access to other users
  *
  * `opening_balance` / `balance` arrive as numeric strings so no value is ever
  * rounded twice on the way to `numeric(19,4)`.
@@ -31,7 +30,7 @@ export const accountTypeSchema = z.enum([
   "other",
 ]);
 
-export const accountVisibilitySchema = z.enum(["space", "restricted"]);
+export const accountVisibilitySchema = z.enum(["personal", "restricted"]);
 export const accountAccessSchema = z.enum(["view", "contribute", "manage"]);
 
 export type AccountType = z.infer<typeof accountTypeSchema>;
@@ -47,13 +46,12 @@ const accountIconSchema = z.string().trim().min(1).max(60);
 
 export const createAccountInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     name: accountNameSchema,
     type: accountTypeSchema,
-    /** Defaults to the space base currency. */
+    /** Defaults to the user's base currency. */
     currency: currencyCodeSchema.optional(),
-    visibility: accountVisibilitySchema.optional().default("space"),
+    visibility: accountVisibilitySchema.optional().default("personal"),
     openingBalance: signedMoneySchema().optional().default("0"),
     creditLimit: positiveMoneySchema().optional(),
     color: hexColorSchema.optional(),
@@ -78,7 +76,6 @@ export type CreateAccountInput = z.input<typeof createAccountInputSchema>;
  */
 export const updateAccountInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     accountId: uuidSchema,
     name: accountNameSchema.optional(),
@@ -101,7 +98,6 @@ export const updateAccountInputSchema = z
 export type UpdateAccountInput = z.input<typeof updateAccountInputSchema>;
 
 export const accountLookupInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   accountId: uuidSchema,
 });
@@ -109,7 +105,6 @@ export const accountLookupInputSchema = z.object({
 export type AccountLookupInput = z.input<typeof accountLookupInputSchema>;
 
 export const listAccountsInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   type: accountTypeSchema.optional(),
   visibility: accountVisibilitySchema.optional(),
@@ -119,7 +114,7 @@ export const listAccountsInputSchema = z.object({
 export type ListAccountsInput = z.input<typeof listAccountsInputSchema>;
 
 export const grantAccountAccessInputSchema = accountLookupInputSchema.extend({
-  /** The space member receiving access. */
+  /** The user receiving access. */
   targetUserId: userIdSchema,
   access: accountAccessSchema,
 });

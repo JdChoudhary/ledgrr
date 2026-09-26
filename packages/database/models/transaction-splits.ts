@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 import { check, foreignKey, numeric, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { categories } from "./categories";
-import { spaces } from "./spaces";
 import { transactions } from "./transactions";
+import { user } from "./auth-schema";
 
 // Only income / expense / refund transactions may be split. The deferred
 // invariant SUM(amount) = transaction.amount is enforced by the database
@@ -13,9 +13,9 @@ export const transactionSplits = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     transactionId: uuid("transaction_id").notNull(),
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     categoryId: uuid("category_id").notNull(),
 
@@ -28,13 +28,13 @@ export const transactionSplits = pgTable(
 
     foreignKey({
       name: "transaction_splits_transaction_fkey",
-      columns: [table.transactionId, table.spaceId],
-      foreignColumns: [transactions.id, transactions.spaceId],
+      columns: [table.transactionId, table.userId],
+      foreignColumns: [transactions.id, transactions.userId],
     }),
     foreignKey({
       name: "transaction_splits_category_fkey",
-      columns: [table.categoryId, table.spaceId],
-      foreignColumns: [categories.id, categories.spaceId],
+      columns: [table.categoryId, table.userId],
+      foreignColumns: [categories.id, categories.userId],
     }),
   ],
 );

@@ -22,10 +22,8 @@ import {
   RepeatIcon,
   TrendingDown,
   TrendingUp,
-  ArrowUpDown,
-  Pause,
 } from "lucide-react";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { useAccounts } from "~/hooks/api/account";
 import { useCategoryOptions } from "~/hooks/api/category/hierarchy";
 import {
@@ -37,7 +35,6 @@ import {
   useResumeRecurringRule,
   useUpdateRecurringRuleStatus,
 } from "~/hooks/api/recurring";
-import { RecurringRuleList } from "./recurring-rule-list";
 import { RecurringFormDialog } from "./recurring-rule-form-dialog";
 import { RecurringCalendar } from "./recurring-calendar";
 import { OccurrenceList } from "./occurrence-list";
@@ -87,27 +84,21 @@ export function RecurringPage() {
     useState<OccurrenceListItem | null>(null);
   const [occurrencePanelOpen, setOccurrencePanelOpen] = useState(false);
 
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const rulesQuery = useRecurringRules(spaceId ? { spaceId } : undefined);
-  const accountsQuery = useAccounts(
-    spaceId ? { spaceId, includeArchived: false } : undefined,
-  );
-  const categories = useCategoryOptions(spaceId ? { spaceId } : undefined);
+  const rulesQuery = useRecurringRules({});
+  const accountsQuery = useAccounts({ includeArchived: false });
+  const categories = useCategoryOptions({});
 
   // Occurrences for the month shown in the calendar — refetched when it changes.
   const occurrenceMonth = format(calendarMonth, "yyyy-MM");
-  const occurrencesQuery = useRecurringOccurrences(
-    spaceId ? { spaceId, month: occurrenceMonth } : undefined,
-  );
+  const occurrencesQuery = useRecurringOccurrences({ month: occurrenceMonth });
   // Dates the rules are due on, projected from their schedules — this is what
   // fills the calendar's future dates and rules that never auto-post.
-  const projectedQuery = useRecurringProjectedOccurrences(
-    spaceId ? { spaceId, month: occurrenceMonth } : undefined,
-  );
+  const projectedQuery = useRecurringProjectedOccurrences({
+    month: occurrenceMonth,
+  });
 
   const fmt = (amount: number) =>
     amount.toLocaleString(undefined, {
@@ -196,10 +187,6 @@ export function RecurringPage() {
   }, [rules, occurrencesQuery.occurrences, projectedQuery.projectedOccurrences]);
 
   const handleSubmit = () => {
-    if (!spaceId) {
-      toast.error("No active space");
-      return;
-    }
     if (!form.description.trim() || !form.amount) {
       toast.error("Please fill in description and amount");
       return;
@@ -213,7 +200,6 @@ export function RecurringPage() {
     const interval = Math.max(1, Math.floor(Number(form.interval) || 1));
 
     createRule.createRuleAsync({
-      spaceId,
       type: form.type,
       amount: Number(form.amount),
       description: form.description.trim(),
@@ -439,7 +425,12 @@ export function RecurringPage() {
               </EmptyContent>
             </Empty>
           ) : (
-            <AllRulesTable rules={rules} accounts={accountOptions} />
+            <AllRulesTable
+              rules={rules}
+              accounts={accountOptions}
+              onTogglePause={handleTogglePause}
+              onCancel={(id) => cancelRule.cancelRule({ ruleId: id })}
+            />
           )}
         </TabsContent>
       </Tabs>

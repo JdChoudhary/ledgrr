@@ -4,7 +4,7 @@ import { hexColorSchema, userIdSchema, uuidSchema } from "../lib/schema";
 /**
  * Input contracts for the category service.
  *
- * Categories are space-scoped. Historical categories are archived rather than
+ * Categories are user-scoped. Historical categories are archived rather than
  * deleted, and merged categories keep pointing at the surviving row.
  */
 
@@ -17,13 +17,12 @@ const categoryIconSchema = z.string().trim().min(1).max(60);
 const sortOrderSchema = z.number().int().min(0).max(1_000_000);
 
 export const createCategoryInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   name: categoryNameSchema,
   type: categoryTypeSchema,
-  /** Optional category group in the same space. */
+  /** Optional category group owned by the same user. */
   groupId: uuidSchema.optional(),
-  /** Stable key for seeded/template categories; unique per space. */
+  /** Stable key for seeded/template categories; unique per user. */
   templateKey: z.string().trim().min(1).max(80).optional(),
   color: hexColorSchema.optional().default("#6B7280"),
   icon: categoryIconSchema.optional().default("tag"),
@@ -34,7 +33,6 @@ export type CreateCategoryInput = z.input<typeof createCategoryInputSchema>;
 
 export const updateCategoryInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     categoryId: uuidSchema,
     name: categoryNameSchema.optional(),
@@ -63,7 +61,6 @@ export const updateCategoryInputSchema = z
 export type UpdateCategoryInput = z.input<typeof updateCategoryInputSchema>;
 
 export const categoryLookupInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   categoryId: uuidSchema,
 });
@@ -71,7 +68,6 @@ export const categoryLookupInputSchema = z.object({
 export type CategoryLookupInput = z.input<typeof categoryLookupInputSchema>;
 
 export const listCategoriesInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   type: categoryTypeSchema.optional(),
   groupId: uuidSchema.optional(),
@@ -82,7 +78,6 @@ export type ListCategoriesInput = z.input<typeof listCategoriesInputSchema>;
 
 export const mergeCategoriesInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     /** The category that disappears: `merged_into_id` points at the target. */
     sourceCategoryId: uuidSchema,

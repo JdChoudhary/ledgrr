@@ -12,17 +12,17 @@ import {
 import { categories } from "./categories";
 import { currencies } from "./currencies";
 import { financialAccounts } from "./financial-accounts";
-import { spaces } from "./spaces";
+import { user } from "./auth-schema";
 
-// Derived, rebuildable analytics keyed by space, day, category, and account.
-export const dailySpaceCategorySummaries = pgTable(
-  "daily_space_category_summary",
+// Derived, rebuildable analytics keyed by user, day, category, and account.
+export const dailyCategorySummaries = pgTable(
+  "daily_category_summary",
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     date: date("date").notNull(),
 
@@ -49,21 +49,21 @@ export const dailySpaceCategorySummaries = pgTable(
   },
   (table) => [
     // NULLS NOT DISTINCT keeps uncategorised rows unique as well.
-    unique("daily_space_category_summary_key_unique")
-      .on(table.spaceId, table.date, table.categoryId, table.accountId)
+    unique("daily_category_summary_key_unique")
+      .on(table.userId, table.date, table.categoryId, table.accountId)
       .nullsNotDistinct(),
     foreignKey({
-      name: "daily_space_category_summary_category_fkey",
-      columns: [table.categoryId, table.spaceId],
-      foreignColumns: [categories.id, categories.spaceId],
+      name: "daily_category_summary_category_fkey",
+      columns: [table.categoryId, table.userId],
+      foreignColumns: [categories.id, categories.userId],
     }),
     foreignKey({
-      name: "daily_space_category_summary_account_fkey",
-      columns: [table.accountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      name: "daily_category_summary_account_fkey",
+      columns: [table.accountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
   ],
 );
 
-export type SelectDailySpaceCategorySummary = typeof dailySpaceCategorySummaries.$inferSelect;
-export type InsertDailySpaceCategorySummary = typeof dailySpaceCategorySummaries.$inferInsert;
+export type SelectDailyCategorySummary = typeof dailyCategorySummaries.$inferSelect;
+export type InsertDailyCategorySummary = typeof dailyCategorySummaries.$inferInsert;

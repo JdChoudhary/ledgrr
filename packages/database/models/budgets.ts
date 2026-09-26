@@ -15,7 +15,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { categories } from "./categories";
 import { budgetPeriodTypeEnum } from "./enums";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 // Every budget targets exactly one category. The category group is never
@@ -25,9 +24,9 @@ export const budgets = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
@@ -53,8 +52,8 @@ export const budgets = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    // Enables the composite space FK from budget_periods.
-    unique("budgets_id_space_id_unique").on(table.id, table.spaceId),
+    // Enables the composite user FK from budget_periods.
+    unique("budgets_id_user_id_unique").on(table.id, table.userId),
 
     check("budgets_limit_amount_positive", sql`${table.limitAmount} > 0`),
     check(
@@ -68,13 +67,13 @@ export const budgets = pgTable(
 
     foreignKey({
       name: "budgets_category_fkey",
-      columns: [table.categoryId, table.spaceId],
-      foreignColumns: [categories.id, categories.spaceId],
+      columns: [table.categoryId, table.userId],
+      foreignColumns: [categories.id, categories.userId],
     }),
 
-    // Active-budget lookups per space + category (duplicate protection).
-    index("budgets_space_category_idx").on(table.spaceId, table.categoryId),
-    index("budgets_space_archived_idx").on(table.spaceId, table.archivedAt),
+    // Active-budget lookups per user + category (duplicate protection).
+    index("budgets_user_category_idx").on(table.userId, table.categoryId),
+    index("budgets_user_archived_idx").on(table.userId, table.archivedAt),
   ],
 );
 

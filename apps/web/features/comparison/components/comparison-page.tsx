@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { format, subMonths } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAnalyticsDashboardData } from "~/hooks/api/analytics";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { ComparisonChangeCards } from "./comparison-change-cards";
 import { ComparisonIncomeExpenseChart } from "./comparison-income-expense-chart";
 import { ComparisonSavingsChart } from "./comparison-savings-chart";
@@ -24,14 +24,13 @@ type ComparisonPageProps = {
 };
 
 export function ComparisonPage({ fromDate, toDate }: ComparisonPageProps) {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const { dashboardData, isLoading: analyticsLoading } = useAnalyticsDashboardData(
-    spaceId ? { spaceId, fromDate, toDate } : undefined,
-  );
+  const { dashboardData, isLoading: analyticsLoading } = useAnalyticsDashboardData({
+    fromDate,
+    toDate,
+  });
 
   const money = fmtCurrency(currency);
 

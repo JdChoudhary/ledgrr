@@ -47,7 +47,7 @@ import {
   useAnalyticsDailySpend,
   useAnalyticsMonthlyTrend,
 } from "~/hooks/api/analytics";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { FundFlowChart } from "./fund-flow-chart";
 import { SpendingHeatmap } from "./spending-heatmap";
 import { NetWorthForecastCard } from "./net-worth-forecast-card";
@@ -101,65 +101,42 @@ const TYPE_META: Record<string, { icon: React.ElementType; className: string; la
 };
 
 export function DashboardView({ fromDate, toDate }: DashboardViewProps) {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
   // Product analytics: page-view event (client-side demo of the track hook;
   // financial events fire server-side inside the services).
   const { trackEvent } = useTrackEvent();
   React.useEffect(() => {
-    if (spaceId) {
-      trackEvent({
-        spaceId,
-        eventName: "dashboard_viewed",
-        eventCategory: "navigation",
-      });
-    }
+    trackEvent({
+      eventName: "dashboard_viewed",
+      eventCategory: "navigation",
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId]);
+  }, []);
 
-  const rangeInput = spaceId ? { spaceId, fromDate, toDate } : undefined;
+  const rangeInput = { fromDate, toDate };
 
   const summary = useDashboardSummary(rangeInput);
   const cashflow = useDashboardCashflow(rangeInput);
   const breakdown = useDashboardCategoryBreakdown(rangeInput);
   const fundFlow = useDashboardFundFlow(rangeInput);
-  const recent = useRecentTransactions(spaceId ? { spaceId, limit: 8 } : undefined);
+  const recent = useRecentTransactions({ limit: 8 });
 
   // Enhanced analytics
   const comparison = useAnalyticsComparison(rangeInput);
   const velocity = useAnalyticsVelocity(rangeInput);
   const topMerchants = useAnalyticsTopMerchants(rangeInput);
   const savingsRate = useAnalyticsSavingsRate(rangeInput);
-  const netWorthForecast = useNetWorthForecast(
-    spaceId ? { spaceId, months: 3, horizon: 6 } : undefined,
-  );
-  const dailySpend = useAnalyticsDailySpend(spaceId ? { spaceId, days: 90 } : undefined);
-  const monthlyTrend = useAnalyticsMonthlyTrend(spaceId ? { spaceId, months: 6 } : undefined);
+  const netWorthForecast = useNetWorthForecast({ months: 3, horizon: 6 });
+  const dailySpend = useAnalyticsDailySpend({ days: 90 });
+  const monthlyTrend = useAnalyticsMonthlyTrend({ months: 6 });
 
   const summaryData = summary.summary;
   const cashflowData = cashflow.cashflow ?? [];
   const breakdownData = breakdown.breakdown ?? [];
 
   const recentRows = recent.recentTransactions ?? [];
-
-  if (!spaceId) {
-    return (
-      <Empty className="mt-8 border">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <TrendingUpIcon />
-          </EmptyMedia>
-          <EmptyTitle>No space found</EmptyTitle>
-          <EmptyDescription>
-            Your dashboard lives inside a space. Create your personal space first.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
 
   const money = fmt(currency);
 
@@ -494,7 +471,7 @@ export function DashboardView({ fromDate, toDate }: DashboardViewProps) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <FundFlowChart flow={fundFlow.fundFlow} isLoading={fundFlow.isPending} fmt={money} />
 
-        <SpendingHeatmap spaceId={spaceId} fmt={money} />
+        <SpendingHeatmap fmt={money} />
       </div>
 
       {/* Top merchants */}

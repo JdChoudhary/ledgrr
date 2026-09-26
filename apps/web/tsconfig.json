@@ -31,7 +31,19 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // Pre-existing dead code: kept on disk, but nothing imports it and it
+    // doesn't compile against the current tRPC API.
+    "**/* copy",
+    "**/* copy/**",
+    "features/bill-splits",
+    "features/bill-splits/**",
+    "components/onboarding-wizard.tsx",
+    // Generated Next.js typecheck entries (they import stale empty pages).
+    ".next/types",
+    ".next/dev/types"
+  ]
 }
 // {
 //   "extends": "@repo/typescript-config/nextjs.json",

@@ -29,7 +29,6 @@ import {
 const TAGS = ["Analytics"] as string[];
 const getPath = generatePath("/analytics");
 
-const uuid = z.uuid();
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a YYYY-MM-DD date");
 
 // ---------------------------------------------------------------------------
@@ -260,7 +259,7 @@ const yearlySeriesSchema = z.object({
 });
 
 // Shared input fragments
-const rangeInput = z.object({ spaceId: uuid, fromDate: dateOnly, toDate: dateOnly });
+const rangeInput = z.object({ fromDate: dateOnly, toDate: dateOnly });
 
 // ---------------------------------------------------------------------------
 // Router
@@ -296,7 +295,6 @@ export const analyticsRouter = router({
     .query(async ({ input, ctx }) => {
       return listEvents({
         actorUserId: ctx.user.id,
-        spaceId: input.spaceId,
         limit: input.limit,
       });
     }),
@@ -326,7 +324,6 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/top-merchants"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         fromDate: dateOnly,
         toDate: dateOnly,
         limit: z.number().int().min(1).max(50).optional().default(5),
@@ -351,7 +348,6 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/monthly-trend"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         months: z.number().int().min(1).max(36).optional().default(6),
       }),
     )
@@ -365,7 +361,6 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/daily-spend"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         days: z.number().int().min(1).max(365).optional().default(90),
       }),
     )
@@ -379,10 +374,10 @@ export const analyticsRouter = router({
   /** Current net worth: assets (accounts + receivables) minus liabilities. */
   netWorth: authenticatedProcedure
     .meta({ openapi: { method: "GET", path: getPath("/net-worth"), tags: TAGS } })
-    .input(z.object({ spaceId: uuid }))
+    .input(z.object({}))
     .output(netWorthCurrentSchema)
     .query(async ({ input, ctx }) => {
-      return getNetWorth({ spaceId: input.spaceId, actorUserId: ctx.user.id });
+      return getNetWorth({ actorUserId: ctx.user.id });
     }),
 
   /** Net worth snapshots over time plus the live current position. */
@@ -390,14 +385,12 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/net-worth-history"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         limit: z.number().int().min(1).max(365).optional().default(90),
       }),
     )
     .output(netWorthHistorySchema)
     .query(async ({ input, ctx }) => {
       return getNetWorthHistory({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         limit: input.limit,
       });
@@ -408,14 +401,12 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/net-worth-projection"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         months: z.number().int().min(1).max(36).optional().default(12),
       }),
     )
     .output(netWorthProjectionSchema)
     .query(async ({ input, ctx }) => {
       return getNetWorthProjection({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         months: input.months,
       });
@@ -429,7 +420,6 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/net-worth-forecast"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         months: z.number().int().min(1).max(24).optional().default(3),
         horizon: z.number().int().min(1).max(36).optional().default(6),
       }),
@@ -437,7 +427,6 @@ export const analyticsRouter = router({
     .output(netWorthForecastSchema)
     .query(async ({ input, ctx }) => {
       return getNetWorthForecast({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         months: input.months,
         horizon: input.horizon,
@@ -454,7 +443,6 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/overview"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         period: z.enum(["month", "quarter", "year", "all"]).optional().default("month"),
         fromDate: dateOnly.nullable().optional(),
         toDate: dateOnly.nullable().optional(),
@@ -463,7 +451,6 @@ export const analyticsRouter = router({
     .output(overviewSchema)
     .query(async ({ input, ctx }) => {
       return getAnalyticsOverview({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         period: input.period,
         fromDate: input.fromDate,
@@ -479,7 +466,6 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/dashboard-data"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         months: z.number().int().min(1).max(36).optional().default(12),
         fromDate: dateOnly.nullable().optional(),
         toDate: dateOnly.nullable().optional(),
@@ -488,7 +474,6 @@ export const analyticsRouter = router({
     .output(dashboardDataSchema)
     .query(async ({ input, ctx }) => {
       return getAnalyticsDashboardData({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         months: input.months,
         fromDate: input.fromDate,
@@ -505,7 +490,6 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/daily-series"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         cursor: dateOnly.nullable().optional(),
         days: z.number().int().min(1).max(31).optional().default(10),
         fromDate: dateOnly.nullable().optional(),
@@ -514,7 +498,6 @@ export const analyticsRouter = router({
     .output(dailySeriesSchema)
     .query(async ({ input, ctx }) => {
       return getDailySeries({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         cursor: input.cursor,
         days: input.days,
@@ -530,14 +513,12 @@ export const analyticsRouter = router({
     .meta({ openapi: { method: "GET", path: getPath("/yearly-series"), tags: TAGS } })
     .input(
       z.object({
-        spaceId: uuid,
         year: z.number().int().min(1970).max(2100).nullable().optional(),
       }),
     )
     .output(yearlySeriesSchema)
     .query(async ({ input, ctx }) => {
       return getYearlySeries({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         year: input.year,
       });

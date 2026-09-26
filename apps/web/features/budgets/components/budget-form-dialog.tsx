@@ -48,7 +48,6 @@ function today(): string {
 
 export type BudgetRecord = {
   id: string;
-  spaceId: string;
   categoryId: string;
   periodType: string;
   startsOn: string;
@@ -58,7 +57,6 @@ export type BudgetRecord = {
 };
 
 type Props = {
-  spaceId: string;
   spaceCurrency: string;
   budget?: BudgetRecord;
   trigger?: React.ReactNode;
@@ -67,7 +65,6 @@ type Props = {
 };
 
 export function BudgetFormDialog({
-  spaceId,
   spaceCurrency,
   budget,
   trigger,
@@ -151,7 +148,6 @@ export function BudgetFormDialog({
 
     if (editing && budget) {
       updateBudget({
-        spaceId,
         budgetId: budget.id,
         limitAmount: amount.trim(),
         rollover,
@@ -161,7 +157,6 @@ export function BudgetFormDialog({
     }
 
     createBudget({
-      spaceId,
       categoryId,
       periodType,
       startsOn,
@@ -192,7 +187,6 @@ export function BudgetFormDialog({
         <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
           {/* The one reusable category selector — grouped + ungrouped. */}
           <CategoryCombobox
-            spaceId={spaceId}
             type="expense"
             value={categoryId}
             onValueChange={(id) => {

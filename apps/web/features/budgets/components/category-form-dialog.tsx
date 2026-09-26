@@ -38,7 +38,6 @@ const NO_GROUP = "__none__";
 type CategoryFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  spaceId: string | undefined;
   /** Groups the category can be filed under. */
   groups: { id: string; name: string }[];
   /** Pre-selected group — the section the dialog was opened from. */
@@ -76,7 +75,6 @@ export function CategoryFormDialog({
 
 function CategoryFormBody({
   onOpenChange,
-  spaceId,
   groups,
   defaultGroupId = null,
   nextSortOrder,
@@ -99,10 +97,6 @@ function CategoryFormBody({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!spaceId) {
-      setError("No active space.");
-      return;
-    }
     if (!trimmed) {
       setError("Give the category a name.");
       return;
@@ -111,7 +105,6 @@ function CategoryFormBody({
 
     try {
       await createCategoryAsync({
-        spaceId,
         name: trimmed,
         type,
         color,

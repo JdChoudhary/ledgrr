@@ -59,7 +59,6 @@ const HEX_COLOR_PATTERN = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 export type { AccountRecord };
 
 type Props = {
-  spaceId: string;
   spaceCurrency: string;
   account?: AccountRecord;
   /** Uncontrolled mode: element that opens the dialog. */
@@ -70,7 +69,6 @@ type Props = {
 };
 
 export function AccountFormDialog({
-  spaceId,
   spaceCurrency,
   account,
   trigger,
@@ -165,10 +163,9 @@ export function AccountFormDialog({
 
     if (editing && account) {
       updateAccount({
-        spaceId,
         accountId: account.id,
         name: name.trim(),
-        visibility: restricted ? "restricted" : "space",
+        visibility: restricted ? "restricted" : "personal",
         creditLimit: isCreditType ? creditLimit.trim() : null,
         color: color.trim() ? color.trim() : null,
       });
@@ -176,13 +173,12 @@ export function AccountFormDialog({
     }
 
     createAccount({
-      spaceId,
       name: name.trim(),
       type,
       openingBalance: openingBalance.trim() || "0",
       ...(isCreditType ? { creditLimit: creditLimit.trim() } : {}),
       ...(color.trim() ? { color: color.trim() } : {}),
-      visibility: restricted ? "restricted" : "space",
+      visibility: restricted ? "restricted" : "personal",
     });
   };
 

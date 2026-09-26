@@ -8,7 +8,6 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { categories } from "./categories";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 export const merchants = pgTable(
@@ -16,9 +15,9 @@ export const merchants = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
@@ -39,13 +38,13 @@ export const merchants = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex("merchants_space_normalized_name_unique").on(table.spaceId, table.normalizedName),
-    unique("merchants_id_space_id_unique").on(table.id, table.spaceId),
-    // Default category must belong to the same space.
+    uniqueIndex("merchants_user_normalized_name_unique").on(table.userId, table.normalizedName),
+    unique("merchants_id_user_id_unique").on(table.id, table.userId),
+    // Default category must be owned by the same user.
     foreignKey({
       name: "merchants_default_category_fkey",
-      columns: [table.defaultCategoryId, table.spaceId],
-      foreignColumns: [categories.id, categories.spaceId],
+      columns: [table.defaultCategoryId, table.userId],
+      foreignColumns: [categories.id, categories.userId],
     }),
   ],
 );

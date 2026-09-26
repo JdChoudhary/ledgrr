@@ -58,11 +58,25 @@ export const billSplitInputSchema = z
 export type BillSplitInput = z.output<typeof billSplitInputSchema>;
 
 // -------------------------------------------------------------------
+// Category splits (Monarch-style: one transaction, several categories)
+// -------------------------------------------------------------------
+
+export const categorySplitInputSchema = z.object({
+  categoryId: uuidSchema,
+  amount: positiveMoney,
+  note: z.string().trim().max(500).nullable().optional(),
+});
+
+export const categorySplitsInputSchema = z
+  .array(categorySplitInputSchema)
+  .min(2)
+  .max(50);
+
+// -------------------------------------------------------------------
 // Inputs
 // -------------------------------------------------------------------
 
 export const createTransactionSchema = z.object({
-  spaceId: uuidSchema,
   type: transactionTypeSchema,
   amount: positiveMoney,
   date: dateOnly.nullable().optional(),
@@ -75,22 +89,20 @@ export const createTransactionSchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
   refundParentId: uuidSchema.nullable().optional(),
   billSplit: billSplitInputSchema.nullable().optional(),
+  categorySplits: categorySplitsInputSchema.nullable().optional(),
 });
 
 export type CreateTransactionInput = z.output<typeof createTransactionSchema>;
 
 export const transactionLookupSchema = z.object({
-  spaceId: uuidSchema,
   transactionId: uuidSchema,
 });
 
 export const deleteTransactionSchema = z.object({
-  spaceId: uuidSchema,
   transactionId: uuidSchema,
 });
 
 export const listTransactionsSchema = z.object({
-  spaceId: uuidSchema,
   accountId: uuidSchema.nullable().optional(),
   type: transactionTypeSchema.optional(),
   status: z.enum(["pending", "posted", "cancelled"]).optional(),
@@ -113,7 +125,7 @@ export const splitPreviewSchema = z.object({
 
 export const transactionResponseSchema = z.object({
   id: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   createdBy: z.string(),
   accountId: z.string().nullable(),
   destinationAccountId: z.string().nullable(),
@@ -145,6 +157,15 @@ export const transactionResponseSchema = z.object({
   categoryName: z.string().nullable(),
   categoryColor: z.string().nullable(),
   accountName: z.string().nullable(),
+  splits: z.array(
+    z.object({
+      categoryId: z.string(),
+      amount: z.string(),
+      note: z.string().nullable(),
+      categoryName: z.string().nullable(),
+      categoryColor: z.string().nullable(),
+    }),
+  ),
   postedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

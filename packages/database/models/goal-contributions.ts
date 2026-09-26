@@ -22,12 +22,11 @@ export const goalContributions = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     goalId: uuid("goal_id").notNull(),
-    spaceId: uuid("space_id").notNull(),
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
 
-    // Optional account the money moved from/to (same space as the goal).
+    // Optional account the money moved from/to (owned by the same user).
     accountId: uuid("account_id"),
 
     type: goalContributionTypeEnum("type").notNull(),
@@ -41,21 +40,20 @@ export const goalContributions = pgTable(
       .defaultNow(),
   },
   (table) => [
-    // Enables the composite space FK from notifications.entity_id if needed and
-    // keeps every contribution anchored to the goal's space.
+    // Keeps every contribution anchored to the goal's owner.
     foreignKey({
-      name: "goal_contributions_goal_space_fkey",
-      columns: [table.goalId, table.spaceId],
-      foreignColumns: [goals.id, goals.spaceId],
+      name: "goal_contributions_goal_user_fkey",
+      columns: [table.goalId, table.userId],
+      foreignColumns: [goals.id, goals.userId],
     }).onDelete("cascade"),
     foreignKey({
-      name: "goal_contributions_account_space_fkey",
-      columns: [table.accountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      name: "goal_contributions_account_user_fkey",
+      columns: [table.accountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }).onDelete("set null"),
 
     index("goal_contributions_goal_created_idx").on(table.goalId, table.createdAt),
-    index("goal_contributions_space_idx").on(table.spaceId),
+    index("goal_contributions_user_idx").on(table.userId),
 
     check("goal_contributions_amount_positive", sql`${table.amount} > 0`),
   ],

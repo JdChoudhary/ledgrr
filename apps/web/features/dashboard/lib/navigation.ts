@@ -133,12 +133,6 @@ export const navigation: NavigationItem[] = [
         icon: Users,
       },
       {
-        id: "spaces",
-        label: "Spaces",
-        href: "/dashboard/together/spaces",
-        icon: Users,
-      },
-      {
         id: "friends",
         label: "Friends",
         href: "/dashboard/together/friends",

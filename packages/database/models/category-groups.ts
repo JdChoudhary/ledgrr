@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 export const categoryGroups = pgTable(
@@ -8,9 +7,9 @@ export const categoryGroups = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
@@ -27,8 +26,8 @@ export const categoryGroups = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex("category_groups_space_name_unique").on(table.spaceId, sql`lower(${table.name})`),
-    unique("category_groups_id_space_id_unique").on(table.id, table.spaceId),
+    uniqueIndex("category_groups_user_name_unique").on(table.userId, sql`lower(${table.name})`),
+    unique("category_groups_id_user_id_unique").on(table.id, table.userId),
   ],
 );
 

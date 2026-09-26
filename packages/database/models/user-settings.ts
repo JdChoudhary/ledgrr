@@ -12,7 +12,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { currencies } from "./currencies";
 import { themeEnum } from "./enums";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 export const userSettings = pgTable(
@@ -35,8 +34,6 @@ export const userSettings = pgTable(
     weekStartDay: smallint("week_start_day").notNull().default(0),
 
     theme: themeEnum("theme").notNull().default("system"),
-
-    defaultSpaceId: uuid("default_space_id").references(() => spaces.id),
 
     autoPostRecurringTransactions: boolean("auto_post_recurring_transactions")
       .notNull()

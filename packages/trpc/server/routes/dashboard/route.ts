@@ -13,7 +13,6 @@ const TAGS = ["Dashboard"] as string[];
 const getPath = generatePath("/dashboard");
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a YYYY-MM-DD date");
-const uuid = z.string().uuid();
 
 // ---------------------------------------------------------------------------
 // Output schemas
@@ -83,7 +82,6 @@ export const dashboardRouter = router({
     })
     .input(
       z.object({
-        spaceId: uuid,
         fromDate: dateOnly.nullable().optional(),
         toDate: dateOnly.nullable().optional(),
       }),
@@ -91,7 +89,6 @@ export const dashboardRouter = router({
     .output(summaryResponseSchema)
     .query(async ({ input, ctx }) => {
       return getDashboardSummary({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         fromDate: input.fromDate,
         toDate: input.toDate,
@@ -105,7 +102,6 @@ export const dashboardRouter = router({
     })
     .input(
       z.object({
-        spaceId: uuid,
         fromDate: dateOnly,
         toDate: dateOnly,
       }),
@@ -113,7 +109,6 @@ export const dashboardRouter = router({
     .output(z.array(cashflowPointSchema))
     .query(async ({ input, ctx }) => {
       return getCashflowTrend({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         fromDate: input.fromDate,
         toDate: input.toDate,
@@ -131,7 +126,6 @@ export const dashboardRouter = router({
     })
     .input(
       z.object({
-        spaceId: uuid,
         fromDate: dateOnly,
         toDate: dateOnly,
         limit: z.number().int().min(1).max(50).optional().default(8),
@@ -140,7 +134,6 @@ export const dashboardRouter = router({
     .output(z.array(categoryBreakdownRowSchema))
     .query(async ({ input, ctx }) => {
       return getCategoryBreakdown({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         fromDate: input.fromDate,
         toDate: input.toDate,
@@ -162,7 +155,6 @@ export const dashboardRouter = router({
     })
     .input(
       z.object({
-        spaceId: uuid,
         fromDate: dateOnly,
         toDate: dateOnly,
       }),
@@ -170,7 +162,6 @@ export const dashboardRouter = router({
     .output(fundFlowSchema)
     .query(async ({ input, ctx }) => {
       return getFundFlow({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         fromDate: input.fromDate,
         toDate: input.toDate,
@@ -187,12 +178,11 @@ export const dashboardRouter = router({
       },
     })
     .input(
-      z.object({ spaceId: uuid, limit: z.number().int().min(1).max(20).optional().default(8) }),
+      z.object({ limit: z.number().int().min(1).max(20).optional().default(8) }),
     )
     .output(z.array(recentTransactionSchema))
     .query(async ({ input, ctx }) => {
       const rows = await listTransactions({
-        spaceId: input.spaceId,
         actorUserId: ctx.user.id,
         limit: input.limit,
         offset: 0,

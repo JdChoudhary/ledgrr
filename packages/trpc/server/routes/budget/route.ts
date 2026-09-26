@@ -31,7 +31,7 @@ const getPath = generatePath("/budgets");
 const budgetPeriodResponseSchema = z.object({
   id: z.string(),
   budgetId: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   periodStart: z.string(),
   periodEnd: z.string(),
   limitAmount: z.string(),

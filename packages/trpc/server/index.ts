@@ -1,7 +1,6 @@
 import { router } from "./trpc";
 
 import { healthRouter } from "./routes/health/route";
-import { spaceRouter } from "./routes/space/route";
 import { categoryGroupRouter } from "./routes/category-group/route";
 import { categoryRouter } from "./routes/category/route";
 import { accountRouter } from "./routes/account/route";
@@ -21,7 +20,6 @@ import { dashboardRouter } from "./routes/dashboard/route";
 
 export const serverRouter = router({
   health: healthRouter,
-  space: spaceRouter,
   categoryGroup: categoryGroupRouter,
   category: categoryRouter,
   account: accountRouter,

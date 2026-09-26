@@ -30,7 +30,6 @@ export type BudgetPeriodType = z.infer<typeof budgetPeriodTypeSchema>;
 
 export const createBudgetInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     categoryId: uuidSchema,
     periodType: budgetPeriodTypeSchema,
@@ -66,10 +65,9 @@ export type CreateBudgetInput = z.input<typeof createBudgetInputSchema>;
 
 export const updateBudgetInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     budgetId: uuidSchema,
-    /** Moving a budget to a different category (same space, expense-eligible). */
+    /** Moving a budget to a different category (same user, expense-eligible). */
     categoryId: uuidSchema.optional(),
     limitAmount: positiveMoneySchema().optional(),
     rollover: z.boolean().optional(),
@@ -93,7 +91,6 @@ export type UpdateBudgetInput = z.input<typeof updateBudgetInputSchema>;
 // -------------------------------------------------------------------
 
 export const budgetLookupSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   budgetId: uuidSchema,
 });
@@ -101,7 +98,6 @@ export const budgetLookupSchema = z.object({
 export type BudgetLookupInput = z.input<typeof budgetLookupSchema>;
 
 export const listBudgetsSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   /** Filter budgets to a single category. */
   categoryId: uuidSchema.optional(),
@@ -115,7 +111,6 @@ export type ListBudgetsInput = z.input<typeof listBudgetsSchema>;
 // -------------------------------------------------------------------
 
 export const budgetPeriodLookupSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   budgetId: uuidSchema,
   periodStart: dateSchema,

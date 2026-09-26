@@ -1,7 +1,5 @@
-import { foreignKey, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { notificationTypeEnum } from "./enums";
-import { spaceMembers } from "./space-members";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 export const notifications = pgTable(
@@ -12,7 +10,6 @@ export const notifications = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
-    spaceId: uuid("space_id").references(() => spaces.id),
 
     type: notificationTypeEnum("type").notNull(),
 
@@ -34,11 +31,6 @@ export const notifications = pgTable(
       table.type,
       table.dedupeKey,
     ),
-    foreignKey({
-      name: "notifications_space_member_fkey",
-      columns: [table.spaceId, table.userId],
-      foreignColumns: [spaceMembers.spaceId, spaceMembers.userId],
-    }),
   ],
 );
 

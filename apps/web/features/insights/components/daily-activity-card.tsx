@@ -17,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAnalyticsDailySeries } from "~/hooks/api/analytics";
 
 type DailyActivityCardProps = {
-  spaceId: string | undefined;
   fromDate: string;
   toDate: string;
   currency: string;
@@ -35,7 +34,6 @@ type DailyActivityCardProps = {
  * date.
  */
 export function DailyActivityCard({
-  spaceId,
   fromDate,
   toDate,
   currency,
@@ -59,10 +57,13 @@ export function DailyActivityCard({
     isFetchingNextPage,
     fetchNextPage,
     isLoading,
-  } = useAnalyticsDailySeries(spaceId ? { spaceId, days: pageSize, fromDate } : undefined, {
-    initialCursor: toDate,
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-  });
+  } = useAnalyticsDailySeries(
+    { days: pageSize, fromDate },
+    {
+      initialCursor: toDate,
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    },
+  );
 
   // Newest first for display.
   const rows = useMemo(

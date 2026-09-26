@@ -25,7 +25,7 @@ import {
 /**
  * Currency service.
  *
- * Currencies are global reference data shared by every space. Reads are open
+ * Currencies are global reference data shared by every user. Reads are open
  * to any authenticated user; writes are restricted to admins
  * (`user.role = "admin"`, as managed by Better Auth's admin plugin).
  *
@@ -40,8 +40,7 @@ const ADMIN_ROLE = "admin";
 /**
  * Throws unless the currency code is registered reference data.
  *
- * Shared with the space / account / goal services, which re-export it so
- * their existing import paths keep working.
+ * Shared with the account / goal / transaction services for reference checks.
  */
 export const assertCurrencyExists = async (code: string): Promise<void> => {
   const [currency] = await db
@@ -82,9 +81,9 @@ const assertAdmin = async (userId: string): Promise<void> => {
 // ---------------------------------------------------------------------------
 
 /**
- * Idempotently ensures the default base currency (USD) exists. Runs inside the
- * signup hook before the personal space is created, so `createPersonalSpace`
- * never dies on a missing `currencies` row. Never throws for an existing row
+ * Idempotently ensures the default base currency (USD) exists. Runs inside
+ * the signup hook so the first transaction never dies on a missing
+ * `currencies` row. Never throws for an existing row
  * (`ON CONFLICT DO NOTHING`), and concurrency-safe.
  */
 export const ensureBaseCurrency = async (): Promise<SelectCurrency> => {

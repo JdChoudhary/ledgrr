@@ -129,13 +129,12 @@ const FREQUENCY_NOUN: Record<Frequency, { one: string; many: string }> = {
 };
 
 type Props = {
-  spaceId: string;
   currency: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-export function TransactionFormDialog({ spaceId, currency, open, onOpenChange }: Props) {
+export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
   const { data: sessionUser } = useSession();
   const selfUserId = sessionUser?.user?.id ?? null;
 
@@ -175,7 +174,7 @@ export function TransactionFormDialog({ spaceId, currency, open, onOpenChange }:
   const typeCardRefs = React.useRef<Partial<Record<TxMode, HTMLButtonElement | null>>>({});
 
   // --- data ---------------------------------------------------------------------
-  const accounts = useAccounts(open ? { spaceId, includeArchived: false } : undefined);
+  const accounts = useAccounts(open ? { includeArchived: false } : undefined);
   const accountOptions: AccountRecord[] = accounts.accounts ?? [];
 
   const { createTransactionAsync, isPending: creatingTransaction } = useCreateTransaction({
@@ -189,7 +188,7 @@ export function TransactionFormDialog({ spaceId, currency, open, onOpenChange }:
   });
 
   // Description autocomplete — drawn from already-loaded transactions.
-  const recentTransactions = useTransactions(open ? { spaceId } : undefined);
+  const recentTransactions = useTransactions(open ? {} : undefined);
   const descriptionSuggestions = React.useMemo(() => {
     const seen = new Set<string>();
     const out: string[] = [];
@@ -444,7 +443,6 @@ export function TransactionFormDialog({ spaceId, currency, open, onOpenChange }:
     // 1. Record the first occurrence (this transaction).
     try {
       await createTransactionAsync({
-        spaceId,
         type: mode,
         amount: parsedAmount,
         date: format(date, "yyyy-MM-dd"),
@@ -463,7 +461,6 @@ export function TransactionFormDialog({ spaceId, currency, open, onOpenChange }:
     if (repeatEnabled) {
       try {
         await createRuleAsync({
-          spaceId,
           type: mode,
           amount: parsedAmount,
           description: description.trim() === "" ? "Recurring transaction" : description.trim(),
@@ -611,7 +608,6 @@ export function TransactionFormDialog({ spaceId, currency, open, onOpenChange }:
   const categoryPickerSection =
     mode !== "transfer" ? (
       <CategoryCombobox
-        spaceId={spaceId}
         value={categoryId}
         onValueChange={setCategoryId}
         type={mode === "income" ? "income" : "expense"}

@@ -12,7 +12,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { currencies } from "./currencies";
 import { financialAccounts } from "./financial-accounts";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 // State is derived: cancelled_at -> cancelled, completed_at -> completed,
@@ -22,9 +21,9 @@ export const goals = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
@@ -52,14 +51,14 @@ export const goals = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    // Enables the composite space FK from transactions.savings_goal_id.
-    unique("goals_id_space_id_unique").on(table.id, table.spaceId),
+    // Enables the composite user FK from transactions.savings_goal_id.
+    unique("goals_id_user_id_unique").on(table.id, table.userId),
 
     check("goals_target_amount_positive", sql`${table.targetAmount} > 0`),
     foreignKey({
       name: "goals_linked_account_fkey",
-      columns: [table.linkedAccountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.linkedAccountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
   ],
 );

@@ -10,7 +10,7 @@ import {
   useAnalyticsNetWorthHistory,
   useAnalyticsNetWorthProjection,
 } from "~/hooks/api/analytics";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { NetWorthHero } from "./net-worth-hero";
 import { ProjectionChart } from "./projection-chart";
 import { HistoryChart } from "./history-chart";
@@ -33,22 +33,16 @@ export function NetWorthPage() {
   const queryClient = useQueryClient();
   const [projectionMonths, setProjectionMonths] = useState(12);
 
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const { netWorth: nwData, isLoading: nwLoading, error: nwError } = useAnalyticsNetWorth(
-    spaceId ? { spaceId } : undefined,
-  );
+  const { netWorth: nwData, isLoading: nwLoading, error: nwError } = useAnalyticsNetWorth({});
 
-  const { netWorthHistory, isLoading: histLoading } = useAnalyticsNetWorthHistory(
-    spaceId ? { spaceId } : undefined,
-  );
+  const { netWorthHistory, isLoading: histLoading } = useAnalyticsNetWorthHistory({});
 
-  const { netWorthProjection, isLoading: projLoading } = useAnalyticsNetWorthProjection(
-    spaceId ? { spaceId, months: projectionMonths } : undefined,
-  );
+  const { netWorthProjection, isLoading: projLoading } = useAnalyticsNetWorthProjection({
+    months: projectionMonths,
+  });
 
   const money = fmtCurrency(currency);
 

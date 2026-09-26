@@ -4,7 +4,7 @@ import { currencyCodeSchema, dateSchema, moneySchema, positiveMoneySchema, userI
 /**
  * Input contracts for the goal service.
  *
- * Goals track savings targets within a space.
+ * Goals track savings targets for a user.
  * State is derived: cancelled_at -> cancelled, completed_at -> completed,
  * otherwise active.
  * current_amount is a rebuildable cache.
@@ -15,7 +15,6 @@ import { currencyCodeSchema, dateSchema, moneySchema, positiveMoneySchema, userI
 // -------------------------------------------------------------------
 
 export const createGoalInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   name: z.string().trim().min(1).max(120),
   targetAmount: positiveMoneySchema(),
@@ -32,7 +31,6 @@ export type CreateGoalInput = z.input<typeof createGoalInputSchema>;
 
 export const updateGoalInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     goalId: uuidSchema,
     name: z.string().trim().min(1).max(120).optional(),
@@ -56,7 +54,6 @@ export type UpdateGoalInput = z.input<typeof updateGoalInputSchema>;
 // -------------------------------------------------------------------
 
 export const goalLookupSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   goalId: uuidSchema,
 });
@@ -64,7 +61,6 @@ export const goalLookupSchema = z.object({
 export type GoalLookupInput = z.input<typeof goalLookupSchema>;
 
 export const listGoalsSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   includeArchived: z.boolean().optional().default(false),
 });
@@ -76,7 +72,6 @@ export type ListGoalsInput = z.input<typeof listGoalsSchema>;
 // -------------------------------------------------------------------
 
 export const contributeToGoalInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   goalId: uuidSchema,
   type: z.enum(["deposit", "withdrawal"]),
@@ -88,7 +83,6 @@ export const contributeToGoalInputSchema = z.object({
 export type ContributeToGoalInput = z.input<typeof contributeToGoalInputSchema>;
 
 export const listGoalContributionsInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   goalId: uuidSchema,
   limit: z.number().int().min(1).max(200).optional().default(50),

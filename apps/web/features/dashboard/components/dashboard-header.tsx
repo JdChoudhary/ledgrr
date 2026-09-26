@@ -2,6 +2,7 @@
 
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SearchCommand } from "./search-command";
 
 type DashboardHeaderProps = {
   title: string;
@@ -22,9 +23,10 @@ export function DashboardHeader({ title, description, actions }: DashboardHeader
         ) : null}
       </div>
 
-      {actions ? (
-        <div className="ml-auto flex min-w-0 items-center gap-2 [flex-wrap:wrap]">{actions}</div>
-      ) : null}
+      <div className="ml-auto flex min-w-0 items-center gap-2 [flex-wrap:wrap]">
+        <SearchCommand />
+        {actions}
+      </div>
     </header>
   );
 }

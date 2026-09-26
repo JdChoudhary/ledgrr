@@ -38,7 +38,6 @@ import {
 interface GoalFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  spaceId: string | undefined;
   currency: string;
   /** Present = edit mode. */
   goal: GoalRecord | null;
@@ -48,7 +47,6 @@ interface GoalFormDialogProps {
 export function GoalFormDialog({
   open,
   onOpenChange,
-  spaceId,
   currency,
   goal,
 }: GoalFormDialogProps) {
@@ -59,9 +57,7 @@ export function GoalFormDialog({
   const [targetDate, setTargetDate] = React.useState("");
   const [linkedAccountId, setLinkedAccountId] = React.useState("");
 
-  const accounts = useAccounts(
-    open && spaceId ? { spaceId } : undefined,
-  );
+  const accounts = useAccounts(open ? {} : undefined);
 
   React.useEffect(() => {
     if (open) {
@@ -91,7 +87,6 @@ export function GoalFormDialog({
   const pending = creating || updating;
 
   const submit = () => {
-    if (!spaceId) return;
     if (!name.trim()) {
       toast.error("Give your goal a name");
       return;
@@ -104,7 +99,6 @@ export function GoalFormDialog({
 
     if (isEdit && goal) {
       updateGoal({
-        spaceId: goal.spaceId,
         goalId: goal.id,
         name: name.trim(),
         targetAmount,
@@ -113,7 +107,6 @@ export function GoalFormDialog({
       });
     } else {
       createGoal({
-        spaceId,
         name: name.trim(),
         targetAmount,
         targetDate: targetDate || null,

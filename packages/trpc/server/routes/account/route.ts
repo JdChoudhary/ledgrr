@@ -31,7 +31,7 @@ const getPath = generatePath("/accounts");
 
 const accountResponseSchema = z.object({
   id: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   createdBy: z.string(),
   name: z.string(),
   type: z.string(),
@@ -51,7 +51,6 @@ const accountResponseSchema = z.object({
 const accountGrantResponseSchema = z.object({
   id: z.string(),
   accountId: z.string(),
-  spaceId: z.string(),
   userId: z.string(),
   access: z.string(),
   grantedBy: z.string(),

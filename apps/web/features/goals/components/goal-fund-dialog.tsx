@@ -55,7 +55,6 @@ export interface FundDialogState {
 
 interface GoalFundDialogProps {
   state: FundDialogState | null;
-  spaceId: string | undefined;
   spaceCurrency: string;
   onOpenChange: (open: boolean) => void;
   onContributed?: (result: ContributionResult) => void;
@@ -71,7 +70,6 @@ interface GoalFundDialogProps {
  */
 export function GoalFundDialog({
   state,
-  spaceId,
   spaceCurrency,
   onOpenChange,
   onContributed,
@@ -98,7 +96,7 @@ export function GoalFundDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const accounts = useAccounts(spaceId ? { spaceId } : undefined);
+  const accounts = useAccounts({});
 
   const { contribute, isPending: contributing } = useContributeToGoal({
     onSuccess: (result) => {
@@ -162,7 +160,6 @@ export function GoalFundDialog({
       return;
     }
     contribute({
-      spaceId: goal.spaceId,
       goalId: goal.id,
       type: mode,
       amount,

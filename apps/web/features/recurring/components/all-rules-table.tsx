@@ -18,17 +18,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
-import { Repeat, ArrowUpRight, ArrowDownRight, ArrowUpDown } from "lucide-react";
+import {
+  Repeat,
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowUpDown,
+  Pause,
+  Play,
+  XCircle,
+} from "lucide-react";
 import { cn } from "cn";
 import type { RecurringRule } from "../lib/types";
-
-const FREQUENCY_LABELS: Record<string, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  yearly: "Yearly",
-};
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-emerald-500/10 text-emerald-600" },
@@ -72,9 +74,19 @@ interface AllRulesTableProps {
   rules: RecurringRule[];
   accounts: Array<{ id: string; name: string }>;
   className?: string;
+  /** Pause an active rule / resume a paused one. */
+  onTogglePause?: (rule: RecurringRule) => void;
+  /** Cancel the rule outright — irreversible, same as the old card action. */
+  onCancel?: (ruleId: string) => void;
 }
 
-export function AllRulesTable({ rules, accounts, className }: AllRulesTableProps) {
+export function AllRulesTable({
+  rules,
+  accounts,
+  className,
+  onTogglePause,
+  onCancel,
+}: AllRulesTableProps) {
   const [accountFilter, setAccountFilter] = React.useState<string>("all");
 
   const filteredRules = React.useMemo(() => {
@@ -92,6 +104,10 @@ export function AllRulesTable({ rules, accounts, className }: AllRulesTableProps
       .filter((r) => r.status === "active")
       .reduce((sum, r) => sum + getMonthlyAmount(r), 0);
   }, [filteredRules]);
+
+  const canAct = onTogglePause != null || onCancel != null;
+  const isTerminal = (rule: RecurringRule) =>
+    rule.status === "cancelled" || rule.status === "completed";
 
   if (rules.length === 0) {
     return (
@@ -148,6 +164,11 @@ export function AllRulesTable({ rules, accounts, className }: AllRulesTableProps
               <TableHead className="text-xs font-semibold">Status</TableHead>
               <TableHead className="text-xs font-semibold text-right">Amount</TableHead>
               <TableHead className="text-xs font-semibold text-right">~Monthly</TableHead>
+              {canAct ? (
+                <TableHead className="text-xs font-semibold text-right">
+                  Actions
+                </TableHead>
+              ) : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -206,6 +227,38 @@ export function AllRulesTable({ rules, accounts, className }: AllRulesTableProps
                       {getMonthlyAmount(rule).toFixed(2)}
                     </span>
                   </TableCell>
+                  {canAct ? (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        {onTogglePause && !isTerminal(rule) ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-lg"
+                            onClick={() => onTogglePause(rule)}
+                            title={rule.status === "active" ? "Pause" : "Resume"}
+                          >
+                            {rule.status === "active" ? (
+                              <Pause className="h-3.5 w-3.5" />
+                            ) : (
+                              <Play className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        ) : null}
+                        {onCancel && !isTerminal(rule) ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive"
+                            onClick={() => onCancel(rule.id)}
+                            title="Cancel rule"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               );
             })}

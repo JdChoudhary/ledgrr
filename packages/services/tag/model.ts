@@ -5,7 +5,7 @@ import { hexColorSchema, userIdSchema, uuidSchema } from "../lib/schema";
  * Input contracts for the tag service.
  *
  * Tags are lightweight labels attached to transactions.
- * A tag belongs to exactly one space (unique on space_id + lower(name)).
+ * A tag belongs to exactly one user (unique on user_id + lower(name)).
  */
 
 // -------------------------------------------------------------------
@@ -13,7 +13,6 @@ import { hexColorSchema, userIdSchema, uuidSchema } from "../lib/schema";
 // -------------------------------------------------------------------
 
 export const createTagInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   name: z.string().trim().min(1).max(60),
   color: hexColorSchema,
@@ -27,7 +26,6 @@ export type CreateTagInput = z.input<typeof createTagInputSchema>;
 
 export const updateTagInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     tagId: uuidSchema,
     name: z.string().trim().min(1).max(60).optional(),
@@ -44,7 +42,6 @@ export type UpdateTagInput = z.input<typeof updateTagInputSchema>;
 // -------------------------------------------------------------------
 
 export const tagLookupSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   tagId: uuidSchema,
 });
@@ -52,7 +49,6 @@ export const tagLookupSchema = z.object({
 export type TagLookupInput = z.input<typeof tagLookupSchema>;
 
 export const listTagsSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   includeArchived: z.boolean().optional().default(false),
 });
@@ -64,7 +60,6 @@ export type ListTagsInput = z.input<typeof listTagsSchema>;
 // -------------------------------------------------------------------
 
 export const attachTagToTransactionSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   transactionId: uuidSchema,
   tagId: uuidSchema,
@@ -73,7 +68,6 @@ export const attachTagToTransactionSchema = z.object({
 export type AttachTagToTransactionInput = z.input<typeof attachTagToTransactionSchema>;
 
 export const detachTagFromTransactionSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   transactionId: uuidSchema,
   tagId: uuidSchema,
@@ -82,7 +76,6 @@ export const detachTagFromTransactionSchema = z.object({
 export type DetachTagFromTransactionInput = z.input<typeof detachTagFromTransactionSchema>;
 
 export const listTransactionTagsSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   transactionId: uuidSchema,
 });

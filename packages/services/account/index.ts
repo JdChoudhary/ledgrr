@@ -2,14 +2,13 @@ import { and, asc, db, eq, isNull } from "@repo/database";
 import {
   accountGrants,
   financialAccounts,
-  spaces,
+  userSettings,
   type SelectAccountGrant,
   type SelectFinancialAccount,
 } from "@repo/database/schema";
 import { ServiceError, isForeignKeyViolation } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember, assertCurrencyExists, assertSpaceRole } from "../space";
-import type { SpaceMemberRole } from "../space/model";
+import { assertCurrencyExists } from "../currency";
 import {
   accountLookupInputSchema,
   createAccountInputSchema,
@@ -30,9 +29,8 @@ import {
 /**
  * Financial account service.
  *
- * Accounts belong to exactly one space, and `space_members` is the default
- * authorization boundary. Restricted accounts narrow that boundary with
- * `account_grants`: effective access is MIN(space capability, grant).
+ * Accounts belong to exactly one user. Restricted accounts can be shared
+ * with other users through `account_grants`.
  *
  * `balance` is a rebuildable cache
  * (`opening_balance` + posted, non-deleted transactions), so it is only
@@ -48,23 +46,26 @@ const ACCESS_RANK: Record<EffectiveAccountAccess, number> = {
   manage: 3,
 };
 
-/** Space role as an upper bound on account capability. */
-const ROLE_ACCESS: Record<SpaceMemberRole, EffectiveAccountAccess> = {
-  owner: "manage",
-  admin: "manage",
-  member: "contribute",
-  viewer: "view",
-  advisor: "view",
-};
-
-const findAccount = async (
-  spaceId: string,
+const findAccountById = async (
   accountId: string,
 ): Promise<SelectFinancialAccount | undefined> => {
   const [account] = await db
     .select()
     .from(financialAccounts)
-    .where(and(eq(financialAccounts.id, accountId), eq(financialAccounts.spaceId, spaceId)))
+    .where(eq(financialAccounts.id, accountId))
+    .limit(1);
+
+  return account;
+};
+
+const findOwnedAccount = async (
+  userId: string,
+  accountId: string,
+): Promise<SelectFinancialAccount | undefined> => {
+  const [account] = await db
+    .select()
+    .from(financialAccounts)
+    .where(and(eq(financialAccounts.id, accountId), eq(financialAccounts.userId, userId)))
     .limit(1);
 
   return account;
@@ -84,33 +85,22 @@ const findGrantAccess = async (
 };
 
 /**
- * Effective access for a member: `space` accounts follow the space role, while
- * `restricted` accounts additionally require a grant (owner/admin administer
- * them so they always keep manage access).
+ * Effective access for a user: the owner always has manage access;
+ * `restricted` accounts additionally require a grant.
  */
 export async function resolveAccountAccess(
   account: SelectFinancialAccount,
-  role: SpaceMemberRole,
   userId: string,
 ): Promise<EffectiveAccountAccess> {
-  const roleAccess = ROLE_ACCESS[role];
-
-  if (account.visibility === "space") {
-    return roleAccess;
-  }
-
-  if (roleAccess === "manage") {
+  if (account.userId === userId) {
     return "manage";
   }
 
-  const grantAccess = await findGrantAccess(account.id, userId);
-
-  if (!grantAccess) {
+  if (account.visibility !== "restricted") {
     return "none";
   }
 
-  // MIN(space capability, grant).
-  return ACCESS_RANK[grantAccess] < ACCESS_RANK[roleAccess] ? grantAccess : roleAccess;
+  return (await findGrantAccess(account.id, userId)) ?? "none";
 }
 
 /**
@@ -118,22 +108,19 @@ export async function resolveAccountAccess(
  * Reused by the transaction service before money moves.
  */
 export async function assertAccountAccess(input: {
-  spaceId: string;
   actorUserId: string;
   accountId: string;
   required?: EffectiveAccountAccess;
 }): Promise<{ account: SelectFinancialAccount; access: EffectiveAccountAccess }> {
-  const { spaceId, actorUserId, accountId, required = "view" } = input;
+  const { actorUserId, accountId, required = "view" } = input;
 
-  const membership = await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const account = await findAccount(spaceId, accountId);
+  const account = await findAccountById(accountId);
 
   if (!account) {
-    throw new ServiceError("NOT_FOUND", "Account not found in this space");
+    throw new ServiceError("NOT_FOUND", "Account not found");
   }
 
-  const access = await resolveAccountAccess(account, membership.role, actorUserId);
+  const access = await resolveAccountAccess(account, actorUserId);
 
   if (ACCESS_RANK[access] < ACCESS_RANK[required]) {
     throw new ServiceError(
@@ -152,14 +139,13 @@ export async function assertAccountAccess(input: {
 // ---------------------------------------------------------------------------
 
 /**
- * Creates an account in the space the actor belongs to.
+ * Creates an account for the user.
  *
  * `balance` starts at `opening_balance`; every later change comes from posted
  * transactions.
  */
 export async function createAccount(input: CreateAccountInput): Promise<SelectFinancialAccount> {
   const {
-    spaceId,
     actorUserId,
     name,
     type,
@@ -171,19 +157,13 @@ export async function createAccount(input: CreateAccountInput): Promise<SelectFi
     icon,
   } = parseInput(createAccountInputSchema, input, "createAccount input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const [space] = await db
-    .select({ baseCurrency: spaces.baseCurrency })
-    .from(spaces)
-    .where(eq(spaces.id, spaceId))
+  const [settings] = await db
+    .select({ displayCurrency: userSettings.displayCurrency })
+    .from(userSettings)
+    .where(eq(userSettings.userId, actorUserId))
     .limit(1);
 
-  if (!space) {
-    throw new ServiceError("NOT_FOUND", "Space not found");
-  }
-
-  const accountCurrency = currency ?? space.baseCurrency;
+  const accountCurrency = currency ?? settings?.displayCurrency ?? "USD";
 
   await assertCurrencyExists(accountCurrency);
 
@@ -191,7 +171,7 @@ export async function createAccount(input: CreateAccountInput): Promise<SelectFi
     const [account] = await db
       .insert(financialAccounts)
       .values({
-        spaceId,
+        userId: actorUserId,
         createdBy: actorUserId,
         name,
         type,
@@ -226,14 +206,13 @@ export async function createAccount(input: CreateAccountInput): Promise<SelectFi
 
 /** Returns an account the actor can at least view. */
 export async function getAccount(input: AccountLookupInput): Promise<SelectFinancialAccount> {
-  const { spaceId, actorUserId, accountId } = parseInput(
+  const { actorUserId, accountId } = parseInput(
     accountLookupInputSchema,
     input,
     "getAccount input",
   );
 
   const { account } = await assertAccountAccess({
-    spaceId,
     actorUserId,
     accountId,
     required: "view",
@@ -243,27 +222,24 @@ export async function getAccount(input: AccountLookupInput): Promise<SelectFinan
 }
 
 /**
- * Accounts in the space, filtered by what the actor may see: `space` accounts
- * follow space membership, `restricted` accounts need a grant (owner/admin see
- * everything).
+ * Accounts visible to the user: their own accounts plus `restricted` accounts
+ * shared with them through `account_grants`.
  */
 export async function listAccounts(
   input: ListAccountsInput,
 ): Promise<ReadonlyArray<SelectFinancialAccount>> {
-  const { spaceId, actorUserId, type, visibility, includeArchived } = parseInput(
+  const { actorUserId, type, visibility, includeArchived } = parseInput(
     listAccountsInputSchema,
     input,
     "listAccounts input",
   );
-
-  const membership = await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const accounts = await db
     .select()
     .from(financialAccounts)
     .where(
       and(
-        eq(financialAccounts.spaceId, spaceId),
+        eq(financialAccounts.userId, actorUserId),
         includeArchived ? undefined : isNull(financialAccounts.archivedAt),
         type === undefined ? undefined : eq(financialAccounts.type, type),
         visibility === undefined ? undefined : eq(financialAccounts.visibility, visibility),
@@ -271,19 +247,28 @@ export async function listAccounts(
     )
     .orderBy(asc(financialAccounts.createdAt));
 
-  if (ROLE_ACCESS[membership.role] === "manage") {
-    return accounts;
-  }
-
-  const grants = await db
-    .select({ accountId: accountGrants.accountId, access: accountGrants.access })
+  // Restricted accounts other users shared with us.
+  const grantedRows = await db
+    .select({ account: financialAccounts })
     .from(accountGrants)
-    .where(and(eq(accountGrants.spaceId, spaceId), eq(accountGrants.userId, actorUserId)));
+    .innerJoin(financialAccounts, eq(financialAccounts.id, accountGrants.accountId))
+    .where(eq(accountGrants.userId, actorUserId));
 
-  const grantedAccountIds = new Set(grants.map((grant) => grant.accountId));
+  const ownIds = new Set(accounts.map((account) => account.id));
 
-  return accounts.filter(
-    (account) => account.visibility === "space" || grantedAccountIds.has(account.id),
+  const grantedAccounts = grantedRows
+    .map((row) => row.account)
+    .filter(
+      (account) =>
+        !ownIds.has(account.id) &&
+        account.visibility === "restricted" &&
+        (includeArchived || !account.archivedAt) &&
+        (type === undefined || account.type === type) &&
+        (visibility === undefined || account.visibility === visibility),
+    );
+
+  return [...accounts, ...grantedAccounts].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
   );
 }
 
@@ -291,18 +276,15 @@ export async function listAccounts(
 export async function listAccountGrants(
   input: AccountLookupInput,
 ): Promise<ReadonlyArray<SelectAccountGrant>> {
-  const { spaceId, actorUserId, accountId } = parseInput(
+  const { actorUserId, accountId } = parseInput(
     accountLookupInputSchema,
     input,
     "listAccountGrants input",
   );
 
-  await assertAccountAccess({ spaceId, actorUserId, accountId, required: "view" });
+  await assertAccountAccess({ actorUserId, accountId, required: "view" });
 
-  return db
-    .select()
-    .from(accountGrants)
-    .where(and(eq(accountGrants.spaceId, spaceId), eq(accountGrants.accountId, accountId)));
+  return db.select().from(accountGrants).where(eq(accountGrants.accountId, accountId));
 }
 
 // ---------------------------------------------------------------------------
@@ -315,14 +297,13 @@ export async function listAccountGrants(
  * new account or an adjustment transaction instead.
  */
 export async function updateAccount(input: UpdateAccountInput): Promise<SelectFinancialAccount> {
-  const { spaceId, actorUserId, accountId, name, visibility, creditLimit, color, icon } = parseInput(
+  const { actorUserId, accountId, name, visibility, creditLimit, color, icon } = parseInput(
     updateAccountInputSchema,
     input,
     "updateAccount input",
   );
 
   const { account } = await assertAccountAccess({
-    spaceId,
     actorUserId,
     accountId,
     required: "manage",
@@ -338,18 +319,16 @@ export async function updateAccount(input: UpdateAccountInput): Promise<SelectFi
   const [updated] = await db
     .update(financialAccounts)
     .set({ name, visibility, creditLimit, color, icon })
-    .where(and(eq(financialAccounts.id, accountId), eq(financialAccounts.spaceId, spaceId)))
+    .where(eq(financialAccounts.id, accountId))
     .returning();
 
   if (!updated) {
-    throw new ServiceError("NOT_FOUND", "Account not found in this space");
+    throw new ServiceError("NOT_FOUND", "Account not found for this user");
   }
 
   // Grants are meaningful only for restricted accounts.
-  if (updated.visibility === "space") {
-    await db
-      .delete(accountGrants)
-      .where(and(eq(accountGrants.spaceId, spaceId), eq(accountGrants.accountId, accountId)));
+  if (updated.visibility === "personal") {
+    await db.delete(accountGrants).where(eq(accountGrants.accountId, accountId));
   }
 
   return updated;
@@ -357,24 +336,18 @@ export async function updateAccount(input: UpdateAccountInput): Promise<SelectFi
 
 /** Archives an account. Transactions keep referencing it. */
 export async function archiveAccount(input: AccountLookupInput): Promise<SelectFinancialAccount> {
-  const { spaceId, actorUserId, accountId } = parseInput(
+  const { actorUserId, accountId } = parseInput(
     accountLookupInputSchema,
     input,
     "archiveAccount input",
   );
 
-  await assertAccountAccess({ spaceId, actorUserId, accountId, required: "manage" });
+  await assertAccountAccess({ actorUserId, accountId, required: "manage" });
 
   const [account] = await db
     .update(financialAccounts)
     .set({ archivedAt: new Date() })
-    .where(
-      and(
-        eq(financialAccounts.id, accountId),
-        eq(financialAccounts.spaceId, spaceId),
-        isNull(financialAccounts.archivedAt),
-      ),
-    )
+    .where(and(eq(financialAccounts.id, accountId), isNull(financialAccounts.archivedAt)))
     .returning();
 
   if (!account) {
@@ -386,22 +359,22 @@ export async function archiveAccount(input: AccountLookupInput): Promise<SelectF
 
 /** Restores an archived account. */
 export async function unarchiveAccount(input: AccountLookupInput): Promise<SelectFinancialAccount> {
-  const { spaceId, actorUserId, accountId } = parseInput(
+  const { actorUserId, accountId } = parseInput(
     accountLookupInputSchema,
     input,
     "unarchiveAccount input",
   );
 
-  await assertAccountAccess({ spaceId, actorUserId, accountId, required: "manage" });
+  await assertAccountAccess({ actorUserId, accountId, required: "manage" });
 
   const [account] = await db
     .update(financialAccounts)
     .set({ archivedAt: null })
-    .where(and(eq(financialAccounts.id, accountId), eq(financialAccounts.spaceId, spaceId)))
+    .where(eq(financialAccounts.id, accountId))
     .returning();
 
   if (!account) {
-    throw new ServiceError("NOT_FOUND", "Account not found in this space");
+    throw new ServiceError("NOT_FOUND", "Account not found for this user");
   }
 
   return account;
@@ -412,76 +385,77 @@ export async function unarchiveAccount(input: AccountLookupInput): Promise<Selec
 // ---------------------------------------------------------------------------
 
 /**
- * Grants (or re-grants) a space member access to a restricted account.
- * Owner/admin only, and the grantee must be an active member of the space.
+ * Grants (or re-grants) another user access to a restricted account.
+ * Only the account owner may grant access.
  */
 export async function grantAccountAccess(
   input: GrantAccountAccessInput,
 ): Promise<SelectAccountGrant> {
-  const { spaceId, actorUserId, accountId, targetUserId, access } = parseInput(
+  const { actorUserId, accountId, targetUserId, access } = parseInput(
     grantAccountAccessInputSchema,
     input,
     "grantAccountAccess input",
   );
 
-  await assertSpaceRole({ spaceId, userId: actorUserId, roles: ["owner", "admin"] });
-
-  const account = await findAccount(spaceId, accountId);
+  const account = await findOwnedAccount(actorUserId, accountId);
 
   if (!account) {
-    throw new ServiceError("NOT_FOUND", "Account not found in this space");
+    throw new ServiceError("NOT_FOUND", "Account not found for this user");
   }
 
   if (account.visibility !== "restricted") {
     throw new ServiceError(
       "INVALID_STATE",
-      "Grants only apply to restricted accounts; every space member can already see this one",
+      "Grants only apply to restricted accounts; the owner can already see this one",
     );
   }
 
+  if (targetUserId === actorUserId) {
+    throw new ServiceError("VALIDATION_ERROR", "You already own this account");
+  }
+
   try {
-    await assertActiveSpaceMember({ spaceId, userId: targetUserId });
-  } catch {
-    throw new ServiceError("VALIDATION_ERROR", "The user must be an active member of this space");
+    const [grant] = await db
+      .insert(accountGrants)
+      .values({ accountId, userId: targetUserId, access, grantedBy: actorUserId })
+      .onConflictDoUpdate({
+        target: [accountGrants.accountId, accountGrants.userId],
+        set: { access, grantedBy: actorUserId },
+      })
+      .returning();
+
+    if (!grant) {
+      throw new ServiceError("INVALID_STATE", "Failed to grant account access");
+    }
+
+    return grant;
+  } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      throw new ServiceError("VALIDATION_ERROR", "Unknown user");
+    }
+    throw error;
   }
-
-  const [grant] = await db
-    .insert(accountGrants)
-    .values({ accountId, spaceId, userId: targetUserId, access, grantedBy: actorUserId })
-    .onConflictDoUpdate({
-      target: [accountGrants.accountId, accountGrants.userId],
-      set: { access, grantedBy: actorUserId },
-    })
-    .returning();
-
-  if (!grant) {
-    throw new ServiceError("INVALID_STATE", "Failed to grant account access");
-  }
-
-  return grant;
 }
 
-/** Revokes a member's access to a restricted account. Owner/admin only. */
+/** Revokes a user's access to a restricted account. Owner only. */
 export async function revokeAccountAccess(
   input: RevokeAccountAccessInput,
 ): Promise<SelectAccountGrant> {
-  const { spaceId, actorUserId, accountId, targetUserId } = parseInput(
+  const { actorUserId, accountId, targetUserId } = parseInput(
     revokeAccountAccessInputSchema,
     input,
     "revokeAccountAccess input",
   );
 
-  await assertSpaceRole({ spaceId, userId: actorUserId, roles: ["owner", "admin"] });
+  const account = await findOwnedAccount(actorUserId, accountId);
+
+  if (!account) {
+    throw new ServiceError("NOT_FOUND", "Account not found for this user");
+  }
 
   const [grant] = await db
     .delete(accountGrants)
-    .where(
-      and(
-        eq(accountGrants.spaceId, spaceId),
-        eq(accountGrants.accountId, accountId),
-        eq(accountGrants.userId, targetUserId),
-      ),
-    )
+    .where(and(eq(accountGrants.accountId, accountId), eq(accountGrants.userId, targetUserId)))
     .returning();
 
   if (!grant) {

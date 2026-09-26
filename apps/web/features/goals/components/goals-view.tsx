@@ -34,7 +34,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useCompleteGoal, useGoals, type GoalRecord } from "~/hooks/api/goal";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 
 import { GoalFundDialog, type FundDialogState } from "./goal-fund-dialog";
 import { GoalHistoryDialog } from "./goal-history-dialog";
@@ -161,7 +161,7 @@ function GoalCard({ goal, currency, now, onDeposit, onWithdraw, onHistory, onEdi
                     size="sm"
                     className="size-8 p-0 text-green-600"
                     disabled={completing}
-                    onClick={() => completeGoal({ spaceId: goal.spaceId, goalId: goal.id })}
+                    onClick={() => completeGoal({ goalId: goal.id })}
                     title="Mark complete"
                   >
                     <CheckCircle2 className="size-4" />
@@ -213,12 +213,10 @@ function GoalCard({ goal, currency, now, onDeposit, onWithdraw, onHistory, onEdi
 // ---------------------------------------------------------------------------
 
 export function GoalsView() {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const goals = useGoals(spaceId ? { spaceId } : undefined);
+  const goals = useGoals({});
 
   const [fundState, setFundState] = React.useState<FundDialogState | null>(null);
   const [historyGoal, setHistoryGoal] = React.useState<GoalRecord | null>(null);
@@ -247,22 +245,6 @@ export function GoalsView() {
         </div>
         <Skeleton className="h-48 w-full" />
       </div>
-    );
-  }
-
-  if (!spaceId) {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Target />
-          </EmptyMedia>
-          <EmptyTitle>No space yet</EmptyTitle>
-          <EmptyDescription>
-            Create your personal space first to start saving toward goals.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
     );
   }
 
@@ -363,7 +345,6 @@ export function GoalsView() {
       {/* Dialogs */}
       <GoalFundDialog
         state={fundState}
-        spaceId={spaceId}
         spaceCurrency={currency}
         onOpenChange={(open) => {
           if (!open) setFundState(null);
@@ -378,7 +359,6 @@ export function GoalsView() {
       />
       <GoalFormDialog
         open={formOpen}
-        spaceId={spaceId}
         goal={editingGoal}
         currency={currency}
         onOpenChange={setFormOpen}

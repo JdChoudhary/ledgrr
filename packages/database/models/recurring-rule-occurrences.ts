@@ -13,8 +13,8 @@ import {
 
 import { recurringRuleOccurrenceStatusEnum } from "./enums";
 import { recurringRules } from "./recurring-rules";
-import { spaces } from "./spaces";
 import { transactions } from "./transactions";
+import { user } from "./auth-schema";
 
 export const recurringRuleOccurrences = pgTable(
   "recurring_rule_occurrences",
@@ -25,9 +25,9 @@ export const recurringRuleOccurrences = pgTable(
 
     transactionId: uuid("transaction_id"),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     /**
      * Version of the recurring rule used for this occurrence.
@@ -114,22 +114,22 @@ export const recurringRuleOccurrences = pgTable(
     check("recurring_rule_occurrences_attempt_count_positive", sql`${table.attemptCount} >= 0`),
 
     /**
-     * Rule must belong to the same space.
+     * Rule must be owned by the same user.
      */
     foreignKey({
       name: "recurring_rule_occurrences_rule_fkey",
-      columns: [table.ruleId, table.spaceId],
-      foreignColumns: [recurringRules.id, recurringRules.spaceId],
+      columns: [table.ruleId, table.userId],
+      foreignColumns: [recurringRules.id, recurringRules.userId],
     }),
 
     /**
-     * Generated transaction must belong
-     * to the same space.
+     * Generated transaction must be owned
+     * by the same user.
      */
     foreignKey({
       name: "recurring_rule_occurrences_transaction_fkey",
-      columns: [table.transactionId, table.spaceId],
-      foreignColumns: [transactions.id, transactions.spaceId],
+      columns: [table.transactionId, table.userId],
+      foreignColumns: [transactions.id, transactions.userId],
     }),
     check(
       "recurring_rule_occurrences_transaction_matches_status",

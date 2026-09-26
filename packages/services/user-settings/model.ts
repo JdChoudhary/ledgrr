@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   currencyCodeSchema,
   userIdSchema,
-  uuidSchema,
   signedMoneySchema,
 } from "../lib/schema";
 
@@ -29,7 +28,6 @@ export const updateUserSettingsInputSchema = z
     dateFormat: z.string().trim().min(1).max(30).optional(),
     weekStartDay: z.number().int().min(0).max(6).optional(),
     theme: themeSchema.optional(),
-    defaultSpaceId: uuidSchema.nullable().optional(),
     autoPostRecurringTransactions: z.boolean().optional(),
     highSpendThreshold: signedMoneySchema().nullable().optional(),
   })
@@ -41,7 +39,6 @@ export const updateUserSettingsInputSchema = z
       v.dateFormat !== undefined ||
       v.weekStartDay !== undefined ||
       v.theme !== undefined ||
-      v.defaultSpaceId !== undefined ||
       v.autoPostRecurringTransactions !== undefined ||
       v.highSpendThreshold !== undefined,
     { message: "Provide at least one field to update" },

@@ -57,7 +57,6 @@ export async function updateUserSettings(input: UpdateUserSettingsInput): Promis
     dateFormat,
     weekStartDay,
     theme,
-    defaultSpaceId,
     autoPostRecurringTransactions,
     highSpendThreshold,
   } = parseInput(updateUserSettingsInputSchema, input, "updateUserSettings input");
@@ -70,7 +69,6 @@ export async function updateUserSettings(input: UpdateUserSettingsInput): Promis
   if (dateFormat !== undefined) updates.dateFormat = dateFormat;
   if (weekStartDay !== undefined) updates.weekStartDay = weekStartDay;
   if (theme !== undefined) updates.theme = theme;
-  if (defaultSpaceId !== undefined) updates.defaultSpaceId = defaultSpaceId;
   if (autoPostRecurringTransactions !== undefined)
     updates.autoPostRecurringTransactions = autoPostRecurringTransactions;
   if (highSpendThreshold !== undefined) updates.highSpendThreshold = highSpendThreshold;
@@ -98,7 +96,6 @@ export async function updateUserSettings(input: UpdateUserSettingsInput): Promis
         dateFormat: (updates.dateFormat as string) ?? "yyyy-MM-dd",
         weekStartDay: (updates.weekStartDay as number) ?? 0,
         theme: (updates.theme as "system" | "light" | "dark") ?? "system",
-        defaultSpaceId: (updates.defaultSpaceId as string | null) ?? null,
         autoPostRecurringTransactions: (updates.autoPostRecurringTransactions as boolean) ?? false,
         highSpendThreshold: (updates.highSpendThreshold as string | null) ?? null,
       })

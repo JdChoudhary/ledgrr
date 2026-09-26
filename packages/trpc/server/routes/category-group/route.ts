@@ -27,7 +27,7 @@ const getPath = generatePath("/category-groups");
 
 const categoryGroupResponseSchema = z.object({
   id: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   createdBy: z.string(),
   name: z.string(),
   sortOrder: z.number(),

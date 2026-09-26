@@ -5,7 +5,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAnalyticsDailySeries } from "~/hooks/api/analytics";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { DailySpendSummary } from "./daily-spend-summary";
 import { DailySpendChart } from "./daily-spend-chart";
 import { DailySpendBreakdown } from "./daily-spend-breakdown";
@@ -27,10 +27,8 @@ type DailySpendPageProps = {
 };
 
 export function DailySpendPage({ fromDate, toDate }: DailySpendPageProps) {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
   // Days load backwards in small pages from today — never into the future.
   const {
@@ -40,7 +38,7 @@ export function DailySpendPage({ fromDate, toDate }: DailySpendPageProps) {
     fetchNextPage,
     isLoading,
   } = useAnalyticsDailySeries(
-    spaceId ? { spaceId, days: PAGE_SIZE, fromDate } : undefined,
+    { days: PAGE_SIZE, fromDate },
     {
       initialCursor: toDate,
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,

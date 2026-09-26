@@ -5,12 +5,13 @@ import {
   foreignKey,
   numeric,
   pgTable,
+  text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { budgets } from "./budgets";
-import { spaces } from "./spaces";
+import { user } from "./auth-schema";
 
 // Each period preserves the limit that applied at the time. actual_spend is
 // populated when the period closes; live spend comes from analytics summaries.
@@ -20,9 +21,9 @@ export const budgetPeriods = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     budgetId: uuid("budget_id").notNull(),
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     periodStart: date("period_start").notNull(),
     periodEnd: date("period_end").notNull(),
@@ -47,8 +48,8 @@ export const budgetPeriods = pgTable(
     ),
     foreignKey({
       name: "budget_periods_budget_fkey",
-      columns: [table.budgetId, table.spaceId],
-      foreignColumns: [budgets.id, budgets.spaceId],
+      columns: [table.budgetId, table.userId],
+      foreignColumns: [budgets.id, budgets.userId],
     }),
   ],
 );

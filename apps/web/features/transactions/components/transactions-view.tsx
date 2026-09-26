@@ -59,7 +59,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { cn } from "cn";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import {
   useDeleteTransaction,
   useTransactions,
@@ -118,10 +118,8 @@ const fmtMoney = (value: string | number): string =>
   });
 
 export function TransactionsView() {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
   const [typeFilter, setTypeFilter] = React.useState<string>("all");
   const [recurringFilter, setRecurringFilter] = React.useState<string>("all");
@@ -130,24 +128,17 @@ export function TransactionsView() {
   const [markRecurringTx, setMarkRecurringTx] = React.useState<(typeof rows)[number] | null>(null);
   const [markRecurringOpen, setMarkRecurringOpen] = React.useState(false);
 
-  const accountsQuery = useAccounts(
-    spaceId ? { spaceId, includeArchived: false } : undefined,
-  );
-  const categories = useCategoryOptions(spaceId ? { spaceId } : undefined);
+  const accountsQuery = useAccounts({ includeArchived: false });
+  const categories = useCategoryOptions({});
 
-  const transactions = useTransactions(
-    spaceId
-      ? {
-          spaceId,
-          ...(typeFilter !== "all"
-            ? { type: typeFilter as "income" | "expense" | "transfer" | "refund" }
-            : {}),
-          ...(recurringFilter !== "all"
-            ? { recurring: recurringFilter as "recurring" | "non_recurring" }
-            : {}),
-        }
-      : undefined,
-  );
+  const transactions = useTransactions({
+    ...(typeFilter !== "all"
+      ? { type: typeFilter as "income" | "expense" | "transfer" | "refund" }
+      : {}),
+    ...(recurringFilter !== "all"
+      ? { recurring: recurringFilter as "recurring" | "non_recurring" }
+      : {}),
+  });
 
   const rows = transactions.transactions ?? [];
 
@@ -168,9 +159,7 @@ export function TransactionsView() {
   });
 
   // --- recurring rules -------------------------------------------------------
-  const recurring = useRecurringRules(
-    spaceId ? { spaceId } : undefined,
-  );
+  const recurring = useRecurringRules({});
   const activeRules = (recurring.rules ?? []).filter(
     (r) => r.status === "active" || r.status === "paused",
   );
@@ -187,9 +176,9 @@ export function TransactionsView() {
   });
 
   React.useEffect(() => {
-    if (spaceId) catchUp.mutate({ spaceId });
+    catchUp.mutate({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId]);
+  }, []);
 
   const pauseRule = useUpdateRecurringRuleStatus({
     onSuccess: () => toast.success("Recurring rule paused"),
@@ -241,7 +230,7 @@ export function TransactionsView() {
     .filter((r) => r.type === "expense")
     .reduce((acc, r) => acc + Number(r.personalAmount), 0);
 
-  if (spaces.isPending || (spaces.spaces && spaces.spaces.length === 0)) {
+  if (transactions.isPending) {
     return (
       <div className="grid gap-4">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -251,22 +240,6 @@ export function TransactionsView() {
         </div>
         <Skeleton className="h-64" />
       </div>
-    );
-  }
-
-  if (!spaceId) {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <ReceiptTextIcon />
-          </EmptyMedia>
-          <EmptyTitle>No space yet</EmptyTitle>
-          <EmptyDescription>
-            Create your personal space to start recording transactions.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
     );
   }
 
@@ -629,9 +602,8 @@ export function TransactionsView() {
               disabled={removeTransaction.isPending}
               onClick={(event) => {
                 event.preventDefault();
-                if (pendingDelete && spaceId) {
+                if (pendingDelete) {
                   removeTransaction.deleteTransaction({
-                    spaceId,
                     transactionId: pendingDelete.id,
                   });
                 }
@@ -647,7 +619,6 @@ export function TransactionsView() {
       </AlertDialog>
 
       <TransactionFormDialog
-        spaceId={spaceId}
         currency={currency}
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -673,7 +644,6 @@ export function TransactionsView() {
           currency: markRecurringTx.currency,
           date: markRecurringTx.date,
         } : null}
-        spaceId={spaceId}
         accounts={(accountsQuery.accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
         categories={categories.items.map((c) => ({ id: c.id, name: c.name }))}
       />

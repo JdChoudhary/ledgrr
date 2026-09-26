@@ -2,8 +2,8 @@ import { and, asc, db, eq, gte, lte, sql } from "@repo/database";
 import {
   recurringRuleOccurrences,
   recurringRules,
-  spaces,
   type SelectRecurringRule,
+  userSettings,
 } from "@repo/database/schema";
 import {
   ServiceError,
@@ -12,7 +12,6 @@ import {
   isUniqueViolation,
 } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember } from "../space";
 import { createTransaction, type TransactionListItem } from "../transaction";
 import {
   computeNextRunDate,
@@ -76,7 +75,7 @@ const toSplitConfigNormalized = (
 
 const toRuleListItem = (row: SelectRecurringRule): RecurringRuleListItem => ({
   id: row.id,
-  spaceId: row.spaceId,
+  userId: row.userId,
   createdBy: row.createdBy,
   accountId: row.accountId,
   destinationAccountId: row.destinationAccountId,
@@ -110,7 +109,6 @@ const toRuleListItem = (row: SelectRecurringRule): RecurringRuleListItem => ({
 export async function createRule(input: CreateRuleInput): Promise<RecurringRuleListItem> {
   const parsed = parseInput(createRuleInputSchema, input, "createRule input");
   const {
-    spaceId,
     actorUserId,
     type,
     amount,
@@ -128,7 +126,6 @@ export async function createRule(input: CreateRuleInput): Promise<RecurringRuleL
     splitConfig,
   } = parsed;
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   // A recurring split is an expense split across participants on every
   // occurrence; other types have nothing to allocate.
@@ -145,18 +142,15 @@ export async function createRule(input: CreateRuleInput): Promise<RecurringRuleL
     );
   }
 
-  // Currency defaults to the space's base currency (rate = 1 world).
+  // Currency defaults to the user's base currency (rate = 1 world).
   let effectiveCurrency = currency;
   if (effectiveCurrency == null) {
-    const [space] = await db
-      .select({ baseCurrency: spaces.baseCurrency })
-      .from(spaces)
-      .where(eq(spaces.id, spaceId))
+    const [settings] = await db
+      .select({ displayCurrency: userSettings.displayCurrency })
+      .from(userSettings)
+      .where(eq(userSettings.userId, actorUserId))
       .limit(1);
-    if (!space) {
-      throw new ServiceError("NOT_FOUND", "Space not found");
-    }
-    effectiveCurrency = space.baseCurrency;
+    effectiveCurrency = settings?.displayCurrency ?? "USD";
   }
 
   const willAutoPost = autoPost ?? false;
@@ -192,7 +186,7 @@ export async function createRule(input: CreateRuleInput): Promise<RecurringRuleL
     const [row] = await db
       .insert(recurringRules)
       .values({
-        spaceId,
+        userId: actorUserId,
         createdBy: actorUserId,
         accountId: accountId ?? null,
         destinationAccountId: destinationAccountId ?? null,
@@ -224,7 +218,7 @@ export async function createRule(input: CreateRuleInput): Promise<RecurringRuleL
     return toRuleListItem(row);
   } catch (error) {
     if (isForeignKeyViolation(error)) {
-      throw new ServiceError("VALIDATION_ERROR", "Invalid space, account or category reference");
+      throw new ServiceError("VALIDATION_ERROR", "Invalid account or category reference");
     }
     if (isCheckViolation(error)) {
       throw new ServiceError("VALIDATION_ERROR", "Recurring rule violates a schedule constraint");
@@ -241,10 +235,9 @@ export async function listRules(
   input: ListRulesInput,
 ): Promise<RecurringRuleListItem[]> {
   const parsed = parseInput(listRulesInputSchema, input, "listRules input");
-  const { spaceId, actorUserId, status } = parsed;
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+  const { actorUserId, status } = parsed;
 
-  const conditions = [eq(recurringRules.spaceId, spaceId)];
+  const conditions = [eq(recurringRules.userId, actorUserId)];
   if (status != null) {
     conditions.push(eq(recurringRules.status, status));
   }
@@ -271,7 +264,6 @@ async function loadRuleForActor(ruleId: string, actorUserId: string) {
   if (!row) {
     throw new ServiceError("NOT_FOUND", "Recurring rule not found");
   }
-  await assertActiveSpaceMember({ spaceId: row.spaceId, userId: actorUserId });
   if (row.createdBy !== actorUserId) {
     throw new ServiceError("FORBIDDEN", "Only the rule creator can manage this rule");
   }
@@ -337,7 +329,7 @@ export async function listRuleLogs(ruleId: string): Promise<RuleLog[]> {
 // ---------------------------------------------------------------------------
 
 /**
- * Post (or log) every occurrence that has come due for the given space's
+ * Post (or log) every occurrence that has come due for the user's
  * active auto-post rules. Idempotent: `recurring_rule_logs` has a unique
  * (ruleId, scheduledFor) index, so a re-run never double-posts.
  *
@@ -345,11 +337,9 @@ export async function listRuleLogs(ruleId: string): Promise<RuleLog[]> {
  * app load; a background scheduler can call the same function later.
  */
 export async function runDueRules(input: {
-  spaceId: string;
   actorUserId: string;
 }): Promise<{ posted: number; logged: number; failed: number }> {
-  const { spaceId, actorUserId } = input;
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+  const { actorUserId } = input;
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -358,7 +348,7 @@ export async function runDueRules(input: {
     .from(recurringRules)
     .where(
       and(
-        eq(recurringRules.spaceId, spaceId),
+        eq(recurringRules.userId, actorUserId),
         eq(recurringRules.status, "active"),
         eq(recurringRules.autoPost, true),
         lte(recurringRules.nextRunDate, today),
@@ -383,7 +373,7 @@ export async function runDueRules(input: {
         .insert(recurringRuleOccurrences)
         .values({
           ruleId: rule.id,
-          spaceId,
+          userId: actorUserId,
           ruleVersion: rule.version,
           transactionId: null,
           scheduledFor,
@@ -408,7 +398,6 @@ export async function runDueRules(input: {
 
       try {
         const transaction: TransactionListItem = await createTransaction({
-          spaceId,
           actorUserId: rule.createdBy,
           type: rule.type === "split_expense" ? "expense" : rule.type,
           amount: Number(rule.amount),
@@ -499,8 +488,7 @@ export async function listOccurrences(
   input: ListOccurrencesInput,
 ): Promise<OccurrenceListItem[]> {
   const parsed = parseInput(listOccurrencesInputSchema, input, "listOccurrences input");
-  const { spaceId, actorUserId, month } = parsed;
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+  const { actorUserId, month } = parsed;
 
   // Get the first and last day of the month
   const [year, mon] = month.split("-").map(Number);
@@ -532,7 +520,7 @@ export async function listOccurrences(
     .innerJoin(recurringRules, eq(recurringRuleOccurrences.ruleId, recurringRules.id))
     .where(
       and(
-        eq(recurringRuleOccurrences.spaceId, spaceId),
+        eq(recurringRuleOccurrences.userId, actorUserId),
         gte(recurringRuleOccurrences.scheduledFor, fromDate),
         lte(recurringRuleOccurrences.scheduledFor, toDate),
       ),
@@ -604,12 +592,11 @@ const projectionAnchor = (
 export async function listProjectedOccurrences(
   input: ListOccurrencesInput,
 ): Promise<ProjectedOccurrence[]> {
-  const { spaceId, actorUserId, month } = parseInput(
+  const { actorUserId, month } = parseInput(
     listOccurrencesInputSchema,
     input,
     "listProjectedOccurrences input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [yearPart, monthPart] = month.split("-").map(Number);
   const year = yearPart ?? new Date().getUTCFullYear();
@@ -637,7 +624,7 @@ export async function listProjectedOccurrences(
       endDate: recurringRules.endDate,
     })
     .from(recurringRules)
-    .where(and(eq(recurringRules.spaceId, spaceId), eq(recurringRules.status, "active")));
+    .where(and(eq(recurringRules.userId, actorUserId), eq(recurringRules.status, "active")));
 
   const events: ProjectedOccurrence[] = [];
 
@@ -694,8 +681,7 @@ export async function confirmOccurrence(
   input: ConfirmOccurrenceInput,
 ): Promise<{ id: string; transactionId: string }> {
   const parsed = parseInput(confirmOccurrenceInputSchema, input, "confirmOccurrence input");
-  const { spaceId, actorUserId, occurrenceId, amount } = parsed;
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+  const { actorUserId, occurrenceId, amount } = parsed;
 
   // Load the occurrence
   const [occurrence] = await db
@@ -707,8 +693,8 @@ export async function confirmOccurrence(
   if (!occurrence) {
     throw new ServiceError("NOT_FOUND", "Occurrence not found");
   }
-  if (occurrence.spaceId !== spaceId) {
-    throw new ServiceError("FORBIDDEN", "Occurrence does not belong to this space");
+  if (occurrence.userId !== actorUserId) {
+    throw new ServiceError("FORBIDDEN", "Occurrence does not belong to this user");
   }
   if (occurrence.status !== "awaiting_confirmation" && occurrence.status !== "pending") {
     throw new ServiceError("INVALID_STATE", `Cannot confirm an occurrence with status: ${occurrence.status}`);
@@ -727,7 +713,6 @@ export async function confirmOccurrence(
 
   // Create the transaction
   const transaction: TransactionListItem = await createTransaction({
-    spaceId,
     actorUserId: rule.createdBy,
     type: rule.type === "split_expense" ? "expense" : rule.type,
     amount: Number(amount),
@@ -766,8 +751,7 @@ export async function skipOccurrence(
   input: SkipOccurrenceInput,
 ): Promise<{ id: string }> {
   const parsed = parseInput(skipOccurrenceInputSchema, input, "skipOccurrence input");
-  const { spaceId, actorUserId, occurrenceId, reason } = parsed;
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+  const { actorUserId, occurrenceId, reason } = parsed;
 
   const [occurrence] = await db
     .select()
@@ -778,8 +762,8 @@ export async function skipOccurrence(
   if (!occurrence) {
     throw new ServiceError("NOT_FOUND", "Occurrence not found");
   }
-  if (occurrence.spaceId !== spaceId) {
-    throw new ServiceError("FORBIDDEN", "Occurrence does not belong to this space");
+  if (occurrence.userId !== actorUserId) {
+    throw new ServiceError("FORBIDDEN", "Occurrence does not belong to this user");
   }
   if (occurrence.status === "success" || occurrence.status === "skipped") {
     throw new ServiceError("INVALID_STATE", `Cannot skip an occurrence with status: ${occurrence.status}`);

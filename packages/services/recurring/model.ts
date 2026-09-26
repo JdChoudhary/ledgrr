@@ -89,7 +89,6 @@ export const ruleSplitConfigSchema = z.object({
 export type RuleSplitConfig = z.infer<typeof ruleSplitConfigSchema>;
 
 export const createRuleInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
 
   type: z.enum(["income", "expense", "transfer"]),
@@ -133,7 +132,6 @@ export type CreateRuleInput = z.input<typeof createRuleInputSchema>;
 // ---------------------------------------------------------------------------
 
 export const listRulesInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   status: recurringStatusSchema.optional(),
 });
@@ -172,7 +170,7 @@ export type RuleSplitConfigNormalized = {
 
 export type RecurringRuleListItem = {
   id: string;
-  spaceId: string;
+  userId: string;
   createdBy: string;
   accountId: string | null;
   destinationAccountId: string | null;
@@ -211,7 +209,6 @@ export type RuleLog = {
 // ---------------------------------------------------------------------------
 
 export const listOccurrencesInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   month: z.string().regex(/^\d{4}-\d{2}$/), // YYYY-MM
 });
@@ -236,7 +233,6 @@ export type ProjectedOccurrence = {
 };
 
 export const confirmOccurrenceInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   occurrenceId: uuidSchema,
   amount: positiveMoneySchema(),
@@ -245,7 +241,6 @@ export const confirmOccurrenceInputSchema = z.object({
 export type ConfirmOccurrenceInput = z.input<typeof confirmOccurrenceInputSchema>;
 
 export const skipOccurrenceInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   occurrenceId: uuidSchema,
   reason: z.string().trim().max(500).optional(),

@@ -11,18 +11,17 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { currencies } from "./currencies";
-import { spaces } from "./spaces";
+import { user } from "./auth-schema";
 
-// Full-access snapshot of a space. Restricted-account viewers must aggregate
-// only the accounts they can see.
+// Full-access snapshot of a user's finances.
 export const financialSnapshots = pgTable(
   "financial_snapshots",
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     snapshotDate: date("snapshot_date").notNull(),
 
@@ -49,7 +48,7 @@ export const financialSnapshots = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("financial_snapshots_space_date_unique").on(table.spaceId, table.snapshotDate),
+    uniqueIndex("financial_snapshots_user_date_unique").on(table.userId, table.snapshotDate),
     check(
       "financial_snapshots_net_worth_reconciles",
       sql`${table.netWorth} = ${table.totalAssets} - ${table.totalLiabilities}`,

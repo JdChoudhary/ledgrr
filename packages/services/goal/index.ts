@@ -9,7 +9,7 @@ import {
 } from "@repo/database/schema";
 import { ServiceError, isForeignKeyViolation } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember, assertCurrencyExists } from "../space";
+import { assertCurrencyExists } from "../currency";
 import { recordEvent } from "../analytics";
 import {
   contributeToGoalInputSchema,
@@ -29,7 +29,7 @@ import {
 
 const listGoalsColumns = {
   id: goals.id,
-  spaceId: goals.spaceId,
+  userId: goals.userId,
   createdBy: goals.createdBy,
   linkedAccountId: goals.linkedAccountId,
   name: goals.name,
@@ -52,7 +52,7 @@ const listGoalsColumns = {
  *   otherwise -> active
  *
  * `current_amount` is a rebuildable cache initialised to 0.
- * Linked accounts must belong to the same space.
+ * Linked accounts must be owned by the same user.
  */
 
 // -------------------------------------------------------------------
@@ -60,13 +60,13 @@ const listGoalsColumns = {
 // -------------------------------------------------------------------
 
 const findGoal = async (
-  spaceId: string,
+  actorUserId: string,
   goalId: string,
 ): Promise<SelectGoal | undefined> => {
   const [goal] = await db
     .select()
     .from(goals)
-    .where(and(eq(goals.id, goalId), eq(goals.spaceId, spaceId)))
+    .where(and(eq(goals.id, goalId), eq(goals.userId, actorUserId)))
     .limit(1);
   return goal;
 };
@@ -76,10 +76,8 @@ const findGoal = async (
 // -------------------------------------------------------------------
 
 export async function createGoal(input: CreateGoalInput): Promise<SelectGoal> {
-  const { spaceId, actorUserId, name, targetAmount, currency, targetDate, linkedAccountId } =
+  const { actorUserId, name, targetAmount, currency, targetDate, linkedAccountId } =
     parseInput(createGoalInputSchema, input, "createGoal input");
-
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const goalCurrency = currency ?? "USD";
   await assertCurrencyExists(goalCurrency);
@@ -88,7 +86,7 @@ export async function createGoal(input: CreateGoalInput): Promise<SelectGoal> {
     const [goal] = await db
       .insert(goals)
       .values({
-        spaceId,
+        userId: actorUserId,
         createdBy: actorUserId,
         name,
         targetAmount,
@@ -104,7 +102,6 @@ export async function createGoal(input: CreateGoalInput): Promise<SelectGoal> {
 
     await recordEvent({
       actorUserId,
-      spaceId: goal.spaceId,
       eventName: "goal_created",
       eventCategory: "goal",
       entityType: "goal",
@@ -127,18 +124,16 @@ export async function createGoal(input: CreateGoalInput): Promise<SelectGoal> {
 // -------------------------------------------------------------------
 
 export async function getGoal(input: GoalLookupInput): Promise<SelectGoal> {
-  const { spaceId, actorUserId, goalId } = parseInput(
+  const { actorUserId, goalId } = parseInput(
     goalLookupSchema,
     input,
     "getGoal input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const goal = await findGoal(spaceId, goalId);
+  const goal = await findGoal(actorUserId, goalId);
 
   if (!goal) {
-    throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+    throw new ServiceError("NOT_FOUND", "Goal not found for this user");
   }
 
   return goal;
@@ -147,18 +142,16 @@ export async function getGoal(input: GoalLookupInput): Promise<SelectGoal> {
 export async function listGoals(
   input: ListGoalsInput,
 ): Promise<ReadonlyArray<SelectGoal>> {
-  const { spaceId, actorUserId, includeArchived } = parseInput(
+  const { actorUserId, includeArchived } = parseInput(
     listGoalsSchema,
     input,
     "listGoals input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   return db
     .select(listGoalsColumns)
     .from(goals)
-    .where(eq(goals.spaceId, spaceId));
+    .where(eq(goals.userId, actorUserId));
 }
 
 // -------------------------------------------------------------------
@@ -166,15 +159,13 @@ export async function listGoals(
 // -------------------------------------------------------------------
 
 export async function updateGoal(input: UpdateGoalInput): Promise<SelectGoal> {
-  const { spaceId, actorUserId, goalId, name, targetAmount, targetDate, linkedAccountId } =
+  const { actorUserId, goalId, name, targetAmount, targetDate, linkedAccountId } =
     parseInput(updateGoalInputSchema, input, "updateGoal input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const goal = await findGoal(spaceId, goalId);
+  const goal = await findGoal(actorUserId, goalId);
 
   if (!goal) {
-    throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+    throw new ServiceError("NOT_FOUND", "Goal not found for this user");
   }
 
   if (goal.completedAt || goal.cancelledAt) {
@@ -185,11 +176,11 @@ export async function updateGoal(input: UpdateGoalInput): Promise<SelectGoal> {
     const [updated] = await db
       .update(goals)
       .set({ name, targetAmount, targetDate, linkedAccountId })
-      .where(and(eq(goals.id, goalId), eq(goals.spaceId, spaceId)))
+      .where(and(eq(goals.id, goalId), eq(goals.userId, actorUserId)))
       .returning();
 
     if (!updated) {
-      throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+      throw new ServiceError("NOT_FOUND", "Goal not found for this user");
     }
 
     return updated;
@@ -206,18 +197,16 @@ export async function updateGoal(input: UpdateGoalInput): Promise<SelectGoal> {
 // -------------------------------------------------------------------
 
 export async function completeGoal(input: GoalLookupInput): Promise<SelectGoal> {
-  const { spaceId, actorUserId, goalId } = parseInput(
+  const { actorUserId, goalId } = parseInput(
     goalLookupSchema,
     input,
     "completeGoal input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const goal = await findGoal(spaceId, goalId);
+  const goal = await findGoal(actorUserId, goalId);
 
   if (!goal) {
-    throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+    throw new ServiceError("NOT_FOUND", "Goal not found for this user");
   }
 
   if (goal.completedAt) {
@@ -231,7 +220,7 @@ export async function completeGoal(input: GoalLookupInput): Promise<SelectGoal> 
   const [updated] = await db
     .update(goals)
     .set({ completedAt: new Date() })
-    .where(and(eq(goals.id, goalId), eq(goals.spaceId, spaceId)))
+    .where(and(eq(goals.id, goalId), eq(goals.userId, actorUserId)))
     .returning();
 
   if (!updated) {
@@ -242,18 +231,16 @@ export async function completeGoal(input: GoalLookupInput): Promise<SelectGoal> 
 }
 
 export async function cancelGoal(input: GoalLookupInput): Promise<SelectGoal> {
-  const { spaceId, actorUserId, goalId } = parseInput(
+  const { actorUserId, goalId } = parseInput(
     goalLookupSchema,
     input,
     "cancelGoal input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const goal = await findGoal(spaceId, goalId);
+  const goal = await findGoal(actorUserId, goalId);
 
   if (!goal) {
-    throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+    throw new ServiceError("NOT_FOUND", "Goal not found for this user");
   }
 
   if (goal.cancelledAt) {
@@ -267,7 +254,7 @@ export async function cancelGoal(input: GoalLookupInput): Promise<SelectGoal> {
   const [updated] = await db
     .update(goals)
     .set({ cancelledAt: new Date() })
-    .where(and(eq(goals.id, goalId), eq(goals.spaceId, spaceId)))
+    .where(and(eq(goals.id, goalId), eq(goals.userId, actorUserId)))
     .returning();
 
   if (!updated) {
@@ -305,15 +292,13 @@ const fmtMoney = (value: number): string => value.toFixed(4);
 export async function contributeToGoal(
   input: ContributeToGoalInput,
 ): Promise<ContributionResult> {
-  const { spaceId, actorUserId, goalId, type, amount, accountId, note } =
+  const { actorUserId, goalId, type, amount, accountId, note } =
     parseInput(contributeToGoalInputSchema, input, "contributeToGoal input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const goal = await findGoal(spaceId, goalId);
+  const goal = await findGoal(actorUserId, goalId);
 
   if (!goal) {
-    throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+    throw new ServiceError("NOT_FOUND", "Goal not found for this user");
   }
 
   if (goal.cancelledAt) {
@@ -353,13 +338,13 @@ export async function contributeToGoal(
       .where(
         and(
           eq(financialAccounts.id, effectiveAccountId),
-          eq(financialAccounts.spaceId, spaceId),
+          eq(financialAccounts.userId, actorUserId),
         ),
       )
       .limit(1);
 
     if (!account) {
-      throw new ServiceError("VALIDATION_ERROR", "Linked account not found in this space");
+      throw new ServiceError("VALIDATION_ERROR", "Linked account not found for this user");
     }
 
     accountBalanceAfter = toMoney(account.balance) - delta;
@@ -375,7 +360,6 @@ export async function contributeToGoal(
         .insert(goalContributions)
         .values({
           goalId,
-          spaceId,
           userId: actorUserId,
           accountId: accountId ?? null,
           type,
@@ -391,11 +375,11 @@ export async function contributeToGoal(
       const [updatedGoal] = await tx
         .update(goals)
         .set({ currentAmount: fmtMoney(newSaved) })
-        .where(and(eq(goals.id, goalId), eq(goals.spaceId, spaceId)))
+        .where(and(eq(goals.id, goalId), eq(goals.userId, actorUserId)))
         .returning();
 
       if (!updatedGoal) {
-        throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+        throw new ServiceError("NOT_FOUND", "Goal not found for this user");
       }
 
       // --- notifications -------------------------------------------------
@@ -404,7 +388,6 @@ export async function contributeToGoal(
       if (belowSaved) {
         notificationRows.push({
           userId: goal.createdBy,
-          spaceId,
           type: "goal_contribution" as const,
           title: `Withdrawal reduces saved amount in “${goal.name}”`,
           body:
@@ -420,7 +403,6 @@ export async function contributeToGoal(
       if (targetReached) {
         notificationRows.push({
           userId: goal.createdBy,
-          spaceId,
           type: "goal_contribution" as const,
           title: `🎉 Goal “${goal.name}” fully funded!`,
           body: `You reached your target of ${fmtMoney(target)}.`,
@@ -449,7 +431,6 @@ export async function contributeToGoal(
 
     await recordEvent({
       actorUserId,
-      spaceId: goal.spaceId,
       eventName: type === "deposit" ? "goal_deposit" : "goal_withdrawal",
       eventCategory: "goal",
       entityType: "goal",
@@ -465,7 +446,7 @@ export async function contributeToGoal(
     return result;
   } catch (error) {
     if (isForeignKeyViolation(error)) {
-      throw new ServiceError("VALIDATION_ERROR", "Invalid account for this goal's space");
+      throw new ServiceError("VALIDATION_ERROR", "Invalid account for this goal");
     }
     throw error;
   }
@@ -477,24 +458,22 @@ export async function contributeToGoal(
 export async function listGoalContributions(
   input: ListGoalContributionsInput,
 ): Promise<ReadonlyArray<SelectGoalContribution>> {
-  const { spaceId, actorUserId, goalId, limit } = parseInput(
+  const { actorUserId, goalId, limit } = parseInput(
     listGoalContributionsInputSchema,
     input,
     "listGoalContributions input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const goal = await findGoal(spaceId, goalId);
+  const goal = await findGoal(actorUserId, goalId);
 
   if (!goal) {
-    throw new ServiceError("NOT_FOUND", "Goal not found in this space");
+    throw new ServiceError("NOT_FOUND", "Goal not found for this user");
   }
 
   return db
     .select()
     .from(goalContributions)
-    .where(and(eq(goalContributions.goalId, goalId), eq(goalContributions.spaceId, spaceId)))
+    .where(and(eq(goalContributions.goalId, goalId), eq(goalContributions.userId, actorUserId)))
     .orderBy(sql`${goalContributions.createdAt} DESC`)
     .limit(limit);
 }

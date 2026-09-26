@@ -2,11 +2,9 @@ import { sql } from "drizzle-orm";
 import { check, date, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { currencies } from "./currencies";
 import { billSplitStatusEnum } from "./enums";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
-// Friend bill splitting does not require a shared financial space, so space_id
-// is optional and only used for trip / roommates / group contexts.
+// Friend bill splitting.
 //
 //   personal transaction Rs 2,000
 //     -> split Jagdeep Rs 1,000, Rahul Rs 1,000
@@ -21,8 +19,6 @@ export const billSplits = pgTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
-
-    spaceId: uuid("space_id").references(() => spaces.id),
 
     title: text("title").notNull(),
 

@@ -1,14 +1,14 @@
-import { and, db, eq, gte, isNull, lt, lte, sql } from "@repo/database";
+import { and, db, eq, gte, inArray, isNull, lt, lte, sql } from "@repo/database";
 import {
   budgetPeriods,
   budgets,
+  transactionSplits,
   transactions,
   type SelectBudget,
   type SelectBudgetPeriod,
 } from "@repo/database/schema";
 import { ServiceError } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember } from "../space";
 import { budgetLookupSchema, type BudgetLookupInput } from "./model";
 import {
   boundsFor,
@@ -49,10 +49,32 @@ const money = (value: number): string => value.toFixed(4);
  * Posted, non-deleted rows count toward budgets. Every budget targets exactly
  * one category — the budget's categoryId is the spend scope. `expense` adds
  * spend; `refund` subtracts from it. Amounts are base-currency so
- * multi-currency spaces aggregate correctly.
+ * multi-currency amounts aggregate correctly.
+ *
+ * Category-split aware: a transaction with split lines contributes its
+ * per-category share (scaled to base currency by the transaction's rate)
+ * instead of its full amount; transactions without splits contribute their
+ * full amount, but only when their single categoryId matches.
  */
-const spendCondition = (budget: SelectBudget) =>
-  eq(transactions.categoryId, budget.categoryId);
+const categoryAllocExpr = (categoryId: string) => {
+  const hasAnySplits = sql`EXISTS (
+    SELECT 1 FROM ${transactionSplits} s
+    WHERE s.transaction_id = ${transactions.id}
+      AND s.user_id = ${transactions.userId}
+  )`;
+  const splitShare = sql`COALESCE((
+    SELECT SUM(s.amount * (${transactions.amountInBaseCurrency} / NULLIF(${transactions.amount}, 0)))
+    FROM ${transactionSplits} s
+    WHERE s.transaction_id = ${transactions.id}
+      AND s.user_id = ${transactions.userId}
+      AND s.category_id = ${categoryId}
+  ), 0)`;
+
+  return sql`CASE WHEN ${hasAnySplits} THEN ${splitShare}
+    ELSE CASE WHEN ${transactions.categoryId} = ${categoryId}
+      THEN ${transactions.amountInBaseCurrency} ELSE 0 END
+  END`;
+};
 
 /** Net spend (expense - refund) for an occurrence, in base currency. */
 const computeSpend = async (
@@ -60,20 +82,22 @@ const computeSpend = async (
   periodStart: string,
   periodEnd: string,
 ): Promise<number> => {
+  const alloc = categoryAllocExpr(budget.categoryId);
   const [row] = await db
     .select({
-      expense: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'expense' THEN ${transactions.amountInBaseCurrency} ELSE 0 END), 0)`,
-      refund: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'refund' THEN ${transactions.amountInBaseCurrency} ELSE 0 END), 0)`,
+      expense: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'expense' THEN ${alloc} ELSE 0 END), 0)`,
+      refund: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'refund' THEN ${alloc} ELSE 0 END), 0)`,
     })
     .from(transactions)
     .where(
       and(
-        eq(transactions.spaceId, budget.spaceId),
+        eq(transactions.userId, budget.userId),
         eq(transactions.status, "posted"),
         isNull(transactions.deletedAt),
         gte(transactions.date, periodStart),
         lte(transactions.date, periodEnd),
-        spendCondition(budget),
+        // Other types contribute nothing; skipping them keeps the scan small.
+        inArray(transactions.type, ["expense", "refund"]),
       ),
     );
 
@@ -101,7 +125,7 @@ export async function createFirstBudgetPeriod(budget: SelectBudget): Promise<voi
     .insert(budgetPeriods)
     .values({
       budgetId: budget.id,
-      spaceId: budget.spaceId,
+      userId: budget.userId,
       periodStart: first.periodStart,
       periodEnd: first.periodEnd,
       limitAmount: budget.limitAmount,
@@ -125,7 +149,7 @@ export async function ensureBudgetPeriods(budget: SelectBudget): Promise<void> {
     .values(
       bounds.map((bound) => ({
         budgetId: budget.id,
-        spaceId: budget.spaceId,
+        userId: budget.userId,
         periodStart: bound.periodStart,
         periodEnd: bound.periodEnd,
         limitAmount: budget.limitAmount,
@@ -212,22 +236,20 @@ export type BudgetStatus = {
 
 /** Ensures occurrences exist and are closed, then reports the live status. */
 export async function getBudgetStatus(input: BudgetLookupInput): Promise<BudgetStatus> {
-  const { spaceId, actorUserId, budgetId } = parseInput(
+  const { actorUserId, budgetId } = parseInput(
     budgetLookupSchema,
     input,
     "getBudgetStatus input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   const [budget] = await db
     .select()
     .from(budgets)
-    .where(and(eq(budgets.id, budgetId), eq(budgets.spaceId, spaceId)))
+    .where(and(eq(budgets.id, budgetId), eq(budgets.userId, actorUserId)))
     .limit(1);
 
   if (!budget) {
-    throw new ServiceError("NOT_FOUND", "Budget not found in this space");
+    throw new ServiceError("NOT_FOUND", "Budget not found for this user");
   }
 
   await ensureBudgetPeriods(budget);

@@ -1,7 +1,7 @@
 "use client";
 
 import MonthlyExpensesChart from "@/components/monthlyChart";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { useAnalyticsOverview } from "~/hooks/api/analytics";
 
 const fmtCurrency = (currency: string) => (value: number): string =>
@@ -20,14 +20,10 @@ export function MonthlyExpensesChartWrapper({
   fromDate,
   toDate,
 }: MonthlyExpensesChartWrapperProps) {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const { overview, isLoading } = useAnalyticsOverview(
-    spaceId ? { spaceId, fromDate, toDate } : undefined,
-  );
+  const { overview, isLoading } = useAnalyticsOverview({ fromDate, toDate });
 
   return (
     <MonthlyExpensesChart

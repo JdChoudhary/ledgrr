@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
 import { useAnalyticsOverview } from "~/hooks/api/analytics";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { DailyActivityCard } from "@/features/insights";
 import { AnalyticsSummary } from "./analytics-summary";
 import { AnalyticsTrends } from "./analytics-trends";
@@ -26,18 +26,17 @@ type AnalyticsPageProps = {
 };
 
 export function AnalyticsPage({ fromDate, toDate }: AnalyticsPageProps) {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const { overview, isLoading, error: analyticsError } = useAnalyticsOverview(
-    spaceId ? { spaceId, fromDate, toDate } : undefined,
-  );
+  const { overview, isLoading, error: analyticsError } = useAnalyticsOverview({
+    fromDate,
+    toDate,
+  });
 
   const money = fmtCurrency(currency);
 
-  if (isLoading || !spaceId) {
+  if (isLoading) {
     return (
       <div className="container mx-auto p-4 max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
@@ -130,7 +129,6 @@ export function AnalyticsPage({ fromDate, toDate }: AnalyticsPageProps) {
 
       {/* Day-by-day activity with incremental "load more" — 10 days per page. */}
       <DailyActivityCard
-        spaceId={spaceId}
         fromDate={fromDate}
         toDate={toDate}
         currency={currency}

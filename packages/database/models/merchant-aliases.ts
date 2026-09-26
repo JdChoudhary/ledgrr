@@ -9,7 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { merchantMatchTypeEnum } from "./enums";
 import { merchants } from "./merchants";
-import { spaces } from "./spaces";
+import { user } from "./auth-schema";
 
 // Regex is deliberately excluded from the default matching path; unsafe or
 // expensive patterns are handled separately.
@@ -18,9 +18,9 @@ export const merchantAliases = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     merchantId: uuid("merchant_id").notNull(),
 
     pattern: text("pattern").notNull(),
@@ -31,16 +31,16 @@ export const merchantAliases = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("merchant_aliases_space_match_pattern_unique").on(
-      table.spaceId,
+    uniqueIndex("merchant_aliases_user_match_pattern_unique").on(
+      table.userId,
       table.matchType,
       table.pattern,
     ),
-    // Composite space FK: an alias and its merchant live in the same space.
+    // Composite user FK: an alias and its merchant share an owner.
     foreignKey({
       name: "merchant_aliases_merchant_fkey",
-      columns: [table.merchantId, table.spaceId],
-      foreignColumns: [merchants.id, merchants.spaceId],
+      columns: [table.merchantId, table.userId],
+      foreignColumns: [merchants.id, merchants.userId],
     }),
   ],
 );

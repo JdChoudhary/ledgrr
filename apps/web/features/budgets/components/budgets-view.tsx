@@ -46,7 +46,7 @@ import {
   useArchiveBudget,
   useUnarchiveBudget,
 } from "~/hooks/api/budget";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 
 import { BudgetFormDialog, type BudgetRecord } from "./budget-form-dialog";
 import { BudgetCharts, type BudgetChartRow } from "./budget-charts";
@@ -88,7 +88,6 @@ function CategoryBudgetRow({
   category,
   budget,
   currency,
-  spaceId,
   onArchive,
   onUnarchive,
   onStatus,
@@ -96,7 +95,6 @@ function CategoryBudgetRow({
   category: { id: string; name: string; color: string };
   budget: BudgetRecord;
   currency: string;
-  spaceId: string;
   onArchive: () => void;
   onUnarchive: () => void;
   onStatus: (budgetId: string, status: BudgetStatusData) => void;
@@ -104,7 +102,7 @@ function CategoryBudgetRow({
   const [editOpen, setEditOpen] = React.useState(false);
   const archived = budget.archivedAt !== null;
 
-  const status = useBudgetStatus({ spaceId: budget.spaceId, budgetId: budget.id });
+  const status = useBudgetStatus({ budgetId: budget.id });
 
   React.useEffect(() => {
     if (status.budgetStatus) {
@@ -218,7 +216,6 @@ function CategoryBudgetRow({
       </div>
 
       <BudgetFormDialog
-        spaceId={spaceId}
         spaceCurrency={currency}
         budget={budget}
         open={editOpen}
@@ -229,17 +226,13 @@ function CategoryBudgetRow({
 }
 
 export function BudgetsView() {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
   const [includeArchived, setIncludeArchived] = React.useState(false);
   const [manageCategoriesOpen, setManageCategoriesOpen] = React.useState(false);
 
-  const grouped = useGroupedBudgets(
-    spaceId ? { spaceId, includeArchived } : undefined,
-  );
+  const grouped = useGroupedBudgets({ includeArchived });
 
   // Live statuses reported by each row, keyed by budget id.
   const statuses = React.useRef(new Map<string, BudgetStatusData>());
@@ -312,23 +305,7 @@ export function BudgetsView() {
   const ungroupedCount = grouped.groupedBudgets?.ungrouped.length ?? 0;
   const hasAnyCategory = groupCount > 0 || ungroupedCount > 0;
 
-  if (spaces.isPending) return <BudgetsSkeleton />;
-
-  if (!spaceId) {
-    return (
-      <Empty className="mt-8 border">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Target />
-          </EmptyMedia>
-          <EmptyTitle>No space found</EmptyTitle>
-          <EmptyDescription>
-            Budgets live inside a space. Create your personal space first.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
+  if (grouped.isPending) return <BudgetsSkeleton />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -354,7 +331,6 @@ export function BudgetsView() {
         </Button>
 
         <BudgetFormDialog
-          spaceId={spaceId}
           spaceCurrency={currency}
           trigger={
             <Button size="sm">
@@ -421,16 +397,13 @@ export function BudgetsView() {
                           category={category}
                           budget={category.budget!}
                           currency={currency}
-                          spaceId={spaceId}
                           onArchive={() =>
                             archiveBudget({
-                              spaceId,
                               budgetId: category.budget!.id,
                             })
                           }
                           onUnarchive={() =>
                             unarchiveBudget({
-                              spaceId,
                               budgetId: category.budget!.id,
                             })
                           }
@@ -465,16 +438,13 @@ export function BudgetsView() {
                         category={category}
                         budget={category.budget!}
                         currency={currency}
-                        spaceId={spaceId}
                         onArchive={() =>
                           archiveBudget({
-                            spaceId,
                             budgetId: category.budget!.id,
                           })
                         }
                         onUnarchive={() =>
                           unarchiveBudget({
-                            spaceId,
                             budgetId: category.budget!.id,
                           })
                         }
@@ -499,7 +469,6 @@ export function BudgetsView() {
       )}
 
       <CategoryManager
-        spaceId={spaceId}
         open={manageCategoriesOpen}
         onOpenChange={setManageCategoriesOpen}
       />

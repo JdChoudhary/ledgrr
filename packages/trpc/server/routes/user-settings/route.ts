@@ -21,7 +21,6 @@ const userSettingsResponseSchema = z.object({
   dateFormat: z.string(),
   weekStartDay: z.number(),
   theme: z.string(),
-  defaultSpaceId: z.string().nullable(),
   autoPostRecurringTransactions: z.boolean(),
   highSpendThreshold: z.string().nullable(),
   createdAt: z.date(),

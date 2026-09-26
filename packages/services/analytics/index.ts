@@ -8,12 +8,11 @@ import {
   financialSnapshots,
   goals,
   recurringRules,
-  spaces,
   transactions,
+  userSettings,
 } from "@repo/database/schema";
 import { ServiceError } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember } from "../space";
 import {
   analyticsDashboardDataInputSchema,
   analyticsOverviewInputSchema,
@@ -102,7 +101,6 @@ const monthBounds = (): { fromDate: string; toDate: string } => {
 export async function recordEvent(input: RecordEventInput): Promise<void> {
   const {
     actorUserId,
-    spaceId,
     sessionId,
     eventName,
     eventCategory,
@@ -115,7 +113,6 @@ export async function recordEvent(input: RecordEventInput): Promise<void> {
   try {
     await db.insert(analyticsEvents).values({
       userId: actorUserId,
-      spaceId: spaceId ?? null,
       sessionId: sessionId ?? null,
       eventName,
       eventCategory: eventCategory ?? null,
@@ -143,9 +140,9 @@ export async function recordEvent(input: RecordEventInput): Promise<void> {
 // 2. Dashboard summary
 // ---------------------------------------------------------------------------
 
-const postedRange = (spaceId: string, fromDate: string, toDate: string) =>
+const postedRange = (userId: string, fromDate: string, toDate: string) =>
   and(
-    eq(transactions.spaceId, spaceId),
+    eq(transactions.userId, userId),
     eq(transactions.status, "posted"),
     isNull(transactions.deletedAt),
     gte(transactions.date, fromDate),
@@ -153,26 +150,22 @@ const postedRange = (spaceId: string, fromDate: string, toDate: string) =>
   );
 
 export async function getDashboardSummary(input: DashboardSummaryInput): Promise<DashboardSummary> {
-  const { spaceId, actorUserId, fromDate, toDate } = parseInput(
+  const { actorUserId, fromDate, toDate } = parseInput(
     dashboardSummaryInputSchema,
     input,
     "getDashboardSummary input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   const bounds = monthBounds();
   const effectiveFrom = fromDate ?? bounds.fromDate;
   const effectiveTo = toDate ?? bounds.toDate;
 
-  const [space] = await db
-    .select({ baseCurrency: spaces.baseCurrency })
-    .from(spaces)
-    .where(eq(spaces.id, spaceId))
+  const [settings] = await db
+    .select({ displayCurrency: userSettings.displayCurrency })
+    .from(userSettings)
+    .where(eq(userSettings.userId, actorUserId))
     .limit(1);
-  if (!space) {
-    throw new ServiceError("NOT_FOUND", "Space not found");
-  }
+  const baseCurrency = settings?.displayCurrency ?? "USD";
 
   // Direction split on the actor's personal share. `personal_amount` is the
   // actor's own economic slice: the full amount for unsplit transactions,
@@ -187,7 +180,7 @@ export async function getDashboardSummary(input: DashboardSummaryInput): Promise
       splitCount: sql<number>`COUNT(${transactions.billSplitId})::int`,
     })
     .from(transactions)
-    .where(postedRange(spaceId, effectiveFrom, effectiveTo));
+    .where(postedRange(actorUserId, effectiveFrom, effectiveTo));
 
   // Outstanding debt across open obligations the actor is a party to.
   const debtRows = await db
@@ -211,7 +204,7 @@ export async function getDashboardSummary(input: DashboardSummaryInput): Promise
   return {
     fromDate: effectiveFrom,
     toDate: effectiveTo,
-    currency: space.baseCurrency,
+    currency: baseCurrency,
     income: totals?.income ?? "0.0000",
     personalExpense: totals?.personalExpense ?? "0.0000",
     grossExpense: totals?.grossExpense ?? "0.0000",
@@ -227,13 +220,12 @@ export async function getDashboardSummary(input: DashboardSummaryInput): Promise
 // ---------------------------------------------------------------------------
 
 export async function getCashflowTrend(input: CashflowInput): Promise<CashflowPoint[]> {
-  const { spaceId, actorUserId, fromDate, toDate } = parseInput(
+  const { actorUserId, fromDate, toDate } = parseInput(
     cashflowInputSchema,
     input,
     "getCashflowTrend input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   // Personal share per day, both directions.
   const rows = await db
@@ -243,7 +235,7 @@ export async function getCashflowTrend(input: CashflowInput): Promise<CashflowPo
       expense: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'expense' THEN ${transactions.personalAmount} ELSE 0 END), 0)`,
     })
     .from(transactions)
-    .where(postedRange(spaceId, fromDate, toDate))
+    .where(postedRange(actorUserId, fromDate, toDate))
     .groupBy(transactions.date)
     .orderBy(transactions.date);
 
@@ -272,13 +264,12 @@ export async function getCashflowTrend(input: CashflowInput): Promise<CashflowPo
 export async function getCategoryBreakdown(
   input: CategoryBreakdownInput,
 ): Promise<CategoryBreakdownRow[]> {
-  const { spaceId, actorUserId, fromDate, toDate, limit } = parseInput(
+  const { actorUserId, fromDate, toDate, limit } = parseInput(
     categoryBreakdownInputSchema,
     input,
     "getCategoryBreakdown input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const rows = await db
     .select({
@@ -289,9 +280,9 @@ export async function getCategoryBreakdown(
     .from(transactions)
     .leftJoin(
       categories,
-      and(eq(categories.id, transactions.categoryId), eq(categories.spaceId, transactions.spaceId)),
+      and(eq(categories.id, transactions.categoryId), eq(categories.userId, transactions.userId)),
     )
-    .where(and(postedRange(spaceId, fromDate, toDate), eq(transactions.type, "expense")))
+    .where(and(postedRange(actorUserId, fromDate, toDate), eq(transactions.type, "expense")))
     .groupBy(transactions.categoryId, categories.name)
     .orderBy(sql`COALESCE(SUM(${transactions.personalAmount}), 0) DESC`)
     .limit(limit);
@@ -378,21 +369,18 @@ const toMonthlyAmount = (amount: number, frequency: string, interval: number): n
   }
 };
 
-const getSpaceCurrency = async (spaceId: string): Promise<string> => {
-  const [space] = await db
-    .select({ baseCurrency: spaces.baseCurrency })
-    .from(spaces)
-    .where(eq(spaces.id, spaceId))
+const getUserBaseCurrency = async (userId: string): Promise<string> => {
+  const [settings] = await db
+    .select({ displayCurrency: userSettings.displayCurrency })
+    .from(userSettings)
+    .where(eq(userSettings.userId, userId))
     .limit(1);
-  if (!space) {
-    throw new ServiceError("NOT_FOUND", "Space not found");
-  }
-  return space.baseCurrency;
+  return settings?.displayCurrency ?? "USD";
 };
 
 /** Active recurring rules normalised to a monthly income/expense pair. */
 const activeRecurringMonthly = async (
-  spaceId: string,
+  actorUserId: string,
 ): Promise<{ income: number; expense: number; count: number }> => {
   const rules = await db
     .select({
@@ -402,7 +390,7 @@ const activeRecurringMonthly = async (
       interval: recurringRules.interval,
     })
     .from(recurringRules)
-    .where(and(eq(recurringRules.spaceId, spaceId), eq(recurringRules.status, "active")));
+    .where(and(eq(recurringRules.userId, actorUserId), eq(recurringRules.status, "active")));
 
   let income = 0;
   let expense = 0;
@@ -421,13 +409,12 @@ const activeRecurringMonthly = async (
 export async function getAnalyticsOverview(
   input: AnalyticsOverviewInput,
 ): Promise<AnalyticsOverview> {
-  const { spaceId, actorUserId, period, fromDate, toDate } = parseInput(
+  const { actorUserId, period, fromDate, toDate } = parseInput(
     analyticsOverviewInputSchema,
     input,
     "getAnalyticsOverview input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const range = fromDate && toDate ? { fromDate, toDate } : periodRange(period);
 
@@ -439,7 +426,7 @@ export async function getAnalyticsOverview(
       refund: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'refund' THEN ${transactions.personalAmount} ELSE 0 END), 0)`,
     })
     .from(transactions)
-    .where(postedRange(spaceId, range.fromDate, range.toDate));
+    .where(postedRange(actorUserId, range.fromDate, range.toDate));
 
   const totalIncome = Number(summaryRow?.income ?? 0);
   const totalExpenses = Number(summaryRow?.expense ?? 0);
@@ -460,11 +447,11 @@ export async function getAnalyticsOverview(
     .from(transactions)
     .leftJoin(
       categories,
-      and(eq(categories.id, transactions.categoryId), eq(categories.spaceId, transactions.spaceId)),
+      and(eq(categories.id, transactions.categoryId), eq(categories.userId, transactions.userId)),
     )
     .where(
       and(
-        postedRange(spaceId, range.fromDate, range.toDate),
+        postedRange(actorUserId, range.fromDate, range.toDate),
         or(eq(transactions.type, "expense"), eq(transactions.type, "income")),
       ),
     )
@@ -491,12 +478,12 @@ export async function getAnalyticsOverview(
     .from(transactions)
     .leftJoin(
       categories,
-      and(eq(categories.id, transactions.categoryId), eq(categories.spaceId, transactions.spaceId)),
+      and(eq(categories.id, transactions.categoryId), eq(categories.userId, transactions.userId)),
     )
     .innerJoin(categoryGroups, eq(categories.groupId, categoryGroups.id))
     .where(
       and(
-        postedRange(spaceId, range.fromDate, range.toDate),
+        postedRange(actorUserId, range.fromDate, range.toDate),
         or(eq(transactions.type, "expense"), eq(transactions.type, "income")),
       ),
     )
@@ -521,7 +508,7 @@ export async function getAnalyticsOverview(
       expense: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'expense' THEN ${transactions.personalAmount} ELSE 0 END), 0)`,
     })
     .from(transactions)
-    .where(postedRange(spaceId, range.fromDate, range.toDate))
+    .where(postedRange(actorUserId, range.fromDate, range.toDate))
     .groupBy(sql`to_char(${transactions.date}, 'YYYY-MM')`)
     .orderBy(sql`to_char(${transactions.date}, 'YYYY-MM')`);
 
@@ -539,7 +526,7 @@ export async function getAnalyticsOverview(
       count: sql<number>`COUNT(*)::int`,
     })
     .from(transactions)
-    .where(and(postedRange(spaceId, range.fromDate, range.toDate), eq(transactions.type, "expense")))
+    .where(and(postedRange(actorUserId, range.fromDate, range.toDate), eq(transactions.type, "expense")))
     .groupBy(merchantLabel)
     .orderBy(sql`COALESCE(SUM(${transactions.personalAmount}), 0) DESC`)
     .limit(10);
@@ -563,12 +550,12 @@ export async function getAnalyticsOverview(
       financialAccounts,
       and(
         eq(financialAccounts.id, transactions.accountId),
-        eq(financialAccounts.spaceId, transactions.spaceId),
+        eq(financialAccounts.userId, transactions.userId),
       ),
     )
     .where(
       and(
-        postedRange(spaceId, range.fromDate, range.toDate),
+        postedRange(actorUserId, range.fromDate, range.toDate),
         or(eq(transactions.type, "expense"), eq(transactions.type, "income")),
       ),
     )
@@ -613,20 +600,18 @@ export async function getAnalyticsOverview(
 export async function getAnalyticsDashboardData(
   input: AnalyticsDashboardDataInput,
 ): Promise<AnalyticsDashboardData> {
-  const { spaceId, actorUserId, months, fromDate, toDate } = parseInput(
+  const { actorUserId, months, fromDate, toDate } = parseInput(
     analyticsDashboardDataInputSchema,
     input,
     "getAnalyticsDashboardData input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   // An explicit range wins over the trailing-months default.
   const range = fromDate && toDate ? { fromDate, toDate } : monthRangeBack(months);
   // Reuse the existing dashboard aggregate (the same series that powers the
   // dashboard cash-flow chart) instead of recomputing it here.
   const daily = await getCashflowTrend({
-    spaceId,
     actorUserId,
     fromDate: range.fromDate,
     toDate: range.toDate,
@@ -641,9 +626,9 @@ export async function getAnalyticsDashboardData(
     .from(transactions)
     .leftJoin(
       categories,
-      and(eq(categories.id, transactions.categoryId), eq(categories.spaceId, transactions.spaceId)),
+      and(eq(categories.id, transactions.categoryId), eq(categories.userId, transactions.userId)),
     )
-    .where(and(postedRange(spaceId, range.fromDate, range.toDate), eq(transactions.type, "expense")))
+    .where(and(postedRange(actorUserId, range.fromDate, range.toDate), eq(transactions.type, "expense")))
     .groupBy(categories.name, categories.color)
     .orderBy(sql`COALESCE(SUM(${transactions.personalAmount}), 0) DESC`)
     .limit(12);
@@ -663,13 +648,12 @@ export async function getAnalyticsDashboardData(
 // ---------------------------------------------------------------------------
 
 const computeCurrentNetWorth = async (
-  spaceId: string,
   actorUserId: string,
 ): Promise<NetWorthCurrent> => {
   const accounts = await db
     .select({ type: financialAccounts.type, balance: financialAccounts.balance })
     .from(financialAccounts)
-    .where(and(eq(financialAccounts.spaceId, spaceId), isNull(financialAccounts.archivedAt)));
+    .where(and(eq(financialAccounts.userId, actorUserId), isNull(financialAccounts.archivedAt)));
 
   const sumOfTypes = (types: string[]): number =>
     accounts
@@ -701,7 +685,7 @@ const computeCurrentNetWorth = async (
     .from(goals)
     .where(
       and(
-        eq(goals.spaceId, spaceId),
+        eq(goals.userId, actorUserId),
         isNull(goals.completedAt),
         isNull(goals.cancelledAt),
       ),
@@ -732,27 +716,25 @@ const computeCurrentNetWorth = async (
 };
 
 export async function getNetWorth(input: NetWorthInput): Promise<NetWorthCurrent> {
-  const { spaceId, actorUserId } = parseInput(netWorthInputSchema, input, "getNetWorth input");
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-  return computeCurrentNetWorth(spaceId, actorUserId);
+  const { actorUserId } = parseInput(netWorthInputSchema, input, "getNetWorth input");
+  return computeCurrentNetWorth(actorUserId);
 }
 
 export async function getNetWorthHistory(input: NetWorthHistoryInput): Promise<NetWorthHistory> {
-  const { spaceId, actorUserId, limit } = parseInput(
+  const { actorUserId, limit } = parseInput(
     netWorthHistoryInputSchema,
     input,
     "getNetWorthHistory input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [snapshotRows, current] = await Promise.all([
     db
       .select()
       .from(financialSnapshots)
-      .where(eq(financialSnapshots.spaceId, spaceId))
+      .where(eq(financialSnapshots.userId, actorUserId))
       .orderBy(desc(financialSnapshots.snapshotDate))
       .limit(limit),
-    computeCurrentNetWorth(spaceId, actorUserId),
+    computeCurrentNetWorth(actorUserId),
   ]);
 
   return {
@@ -771,19 +753,18 @@ export async function getNetWorthHistory(input: NetWorthHistoryInput): Promise<N
 export async function getNetWorthProjection(
   input: NetWorthProjectionInput,
 ): Promise<NetWorthProjection> {
-  const { spaceId, actorUserId, months } = parseInput(
+  const { actorUserId, months } = parseInput(
     netWorthProjectionInputSchema,
     input,
     "getNetWorthProjection input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const now = new Date();
   const currentMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  const current = await computeCurrentNetWorth(spaceId, actorUserId);
+  const current = await computeCurrentNetWorth(actorUserId);
   const baselineNetWorth = current.totalBalance;
 
-  const recurring = await activeRecurringMonthly(spaceId);
+  const recurring = await activeRecurringMonthly(actorUserId);
   let monthlyIncome = recurring.income;
   let monthlyExpenses = recurring.expense;
 
@@ -798,7 +779,7 @@ export async function getNetWorthProjection(
       .from(transactions)
       .where(
         and(
-          eq(transactions.spaceId, spaceId),
+          eq(transactions.userId, actorUserId),
           eq(transactions.status, "posted"),
           isNull(transactions.deletedAt),
           gte(transactions.date, isoDate(threeMonthsAgo)),
@@ -823,7 +804,7 @@ export async function getNetWorthProjection(
       netWorth: financialSnapshots.netWorth,
     })
     .from(financialSnapshots)
-    .where(eq(financialSnapshots.spaceId, spaceId))
+    .where(eq(financialSnapshots.userId, actorUserId))
     .orderBy(desc(financialSnapshots.snapshotDate))
     .limit(months + 12);
 
@@ -891,12 +872,11 @@ export async function getNetWorthProjection(
 // ---------------------------------------------------------------------------
 
 export async function getComparison(input: ComparisonInput): Promise<ComparisonRow[]> {
-  const { spaceId, actorUserId, fromDate, toDate } = parseInput(
+  const { actorUserId, fromDate, toDate } = parseInput(
     comparisonInputSchema,
     input,
     "getComparison input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const span = daysInclusive(fromDate, toDate);
   const previousTo = shiftDate(fromDate, -1);
@@ -904,8 +884,8 @@ export async function getComparison(input: ComparisonInput): Promise<ComparisonR
 
   // Reuse the dashboard summary aggregate for both windows (the old code path).
   const [current, previous] = await Promise.all([
-    getDashboardSummary({ spaceId, actorUserId, fromDate, toDate }),
-    getDashboardSummary({ spaceId, actorUserId, fromDate: previousFrom, toDate: previousTo }),
+    getDashboardSummary({ actorUserId, fromDate, toDate }),
+    getDashboardSummary({ actorUserId, fromDate: previousFrom, toDate: previousTo }),
   ]);
 
   const currentSavings =
@@ -927,12 +907,11 @@ export async function getComparison(input: ComparisonInput): Promise<ComparisonR
 }
 
 export async function getSpendingVelocity(input: CashflowInput): Promise<SpendingVelocity> {
-  const { spaceId, actorUserId, fromDate, toDate } = parseInput(
+  const { actorUserId, fromDate, toDate } = parseInput(
     cashflowInputSchema,
     input,
     "getSpendingVelocity input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const rows = await db
     .select({
@@ -940,7 +919,7 @@ export async function getSpendingVelocity(input: CashflowInput): Promise<Spendin
       total: sql<string>`COALESCE(SUM(${transactions.personalAmount}), 0)`,
     })
     .from(transactions)
-    .where(and(postedRange(spaceId, fromDate, toDate), eq(transactions.type, "expense")))
+    .where(and(postedRange(actorUserId, fromDate, toDate), eq(transactions.type, "expense")))
     .groupBy(transactions.date)
     .orderBy(transactions.date);
 
@@ -974,12 +953,11 @@ export async function getSpendingVelocity(input: CashflowInput): Promise<Spendin
 }
 
 export async function getTopMerchants(input: TopMerchantsInput): Promise<TopMerchantRow[]> {
-  const { spaceId, actorUserId, fromDate, toDate, limit } = parseInput(
+  const { actorUserId, fromDate, toDate, limit } = parseInput(
     topMerchantsInputSchema,
     input,
     "getTopMerchants input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const merchantLabel = sql<string>`COALESCE(${transactions.merchant}, ${transactions.description}, 'Unknown')`;
   const rows = await db
@@ -989,7 +967,7 @@ export async function getTopMerchants(input: TopMerchantsInput): Promise<TopMerc
       count: sql<number>`COUNT(*)::int`,
     })
     .from(transactions)
-    .where(and(postedRange(spaceId, fromDate, toDate), eq(transactions.type, "expense")))
+    .where(and(postedRange(actorUserId, fromDate, toDate), eq(transactions.type, "expense")))
     .groupBy(merchantLabel)
     .orderBy(sql`COALESCE(SUM(${transactions.personalAmount}), 0) DESC`)
     .limit(limit);
@@ -1007,14 +985,13 @@ export async function getTopMerchants(input: TopMerchantsInput): Promise<TopMerc
 }
 
 export async function getSavingsRate(input: CashflowInput): Promise<SavingsRate> {
-  const { spaceId, actorUserId, fromDate, toDate } = parseInput(
+  const { actorUserId, fromDate, toDate } = parseInput(
     cashflowInputSchema,
     input,
     "getSavingsRate input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const summary = await getDashboardSummary({ spaceId, actorUserId, fromDate, toDate });
+  const summary = await getDashboardSummary({ actorUserId, fromDate, toDate });
   const income = Number(summary.income) + Number(summary.refund);
   const expense = Number(summary.personalExpense);
   const rate = income > 0 ? ((income - expense) / income) * 100 : 0;
@@ -1023,12 +1000,11 @@ export async function getSavingsRate(input: CashflowInput): Promise<SavingsRate>
 }
 
 export async function getMonthlyTrend(input: MonthlyTrendInput): Promise<MonthlyTrendRow[]> {
-  const { spaceId, actorUserId, months } = parseInput(
+  const { actorUserId, months } = parseInput(
     monthlyTrendInputSchema,
     input,
     "getMonthlyTrend input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const range = monthRangeBack(months);
   const rows = await db
@@ -1038,7 +1014,7 @@ export async function getMonthlyTrend(input: MonthlyTrendInput): Promise<Monthly
       expense: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'expense' THEN ${transactions.personalAmount} ELSE 0 END), 0)`,
     })
     .from(transactions)
-    .where(postedRange(spaceId, range.fromDate, range.toDate))
+    .where(postedRange(actorUserId, range.fromDate, range.toDate))
     .groupBy(sql`to_char(${transactions.date}, 'YYYY-MM')`)
     .orderBy(sql`to_char(${transactions.date}, 'YYYY-MM')`);
 
@@ -1062,18 +1038,17 @@ export async function getMonthlyTrend(input: MonthlyTrendInput): Promise<Monthly
 export async function getNetWorthForecast(
   input: NetWorthForecastInput,
 ): Promise<NetWorthForecast> {
-  const { spaceId, actorUserId, months, horizon } = parseInput(
+  const { actorUserId, months, horizon } = parseInput(
     netWorthForecastInputSchema,
     input,
     "getNetWorthForecast input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [currency, current, recurring, trend] = await Promise.all([
-    getSpaceCurrency(spaceId),
-    computeCurrentNetWorth(spaceId, actorUserId),
-    activeRecurringMonthly(spaceId),
-    getMonthlyTrend({ spaceId, actorUserId, months }),
+    getUserBaseCurrency(actorUserId),
+    computeCurrentNetWorth(actorUserId),
+    activeRecurringMonthly(actorUserId),
+    getMonthlyTrend({ actorUserId, months }),
   ]);
 
   const history = trend.map((row) => ({
@@ -1127,12 +1102,11 @@ export async function getNetWorthForecast(
 // ---------------------------------------------------------------------------
 
 export async function getDailySpend(input: DailySpendInput): Promise<DailySpend> {
-  const { spaceId, actorUserId, days } = parseInput(
+  const { actorUserId, days } = parseInput(
     dailySpendInputSchema,
     input,
     "getDailySpend input",
   );
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const now = new Date();
   const today = isoDate(now);
@@ -1140,7 +1114,7 @@ export async function getDailySpend(input: DailySpendInput): Promise<DailySpend>
   const monthStart = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
 
   const [currency, rows] = await Promise.all([
-    getSpaceCurrency(spaceId),
+    getUserBaseCurrency(actorUserId),
     db
       .select({
         date: transactions.date,
@@ -1149,7 +1123,7 @@ export async function getDailySpend(input: DailySpendInput): Promise<DailySpend>
       .from(transactions)
       .where(
         and(
-          postedRange(spaceId, windowStart, today),
+          postedRange(actorUserId, windowStart, today),
           eq(transactions.type, "expense"),
         ),
       )
@@ -1220,15 +1194,14 @@ export async function getDailySpend(input: DailySpendInput): Promise<DailySpend>
 // ---------------------------------------------------------------------------
 
 export async function getFundFlow(input: FundFlowInput): Promise<FundFlow> {
-  const { spaceId, actorUserId, fromDate, toDate } = parseInput(
+  const { actorUserId, fromDate, toDate } = parseInput(
     fundFlowInputSchema,
     input,
     "getFundFlow input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const range = postedRange(spaceId, fromDate, toDate);
+  const range = postedRange(actorUserId, fromDate, toDate);
 
   const [incomeRows, spendingRows, currency] = await Promise.all([
     // Income streams (refunds count as money coming back in), by account.
@@ -1246,7 +1219,7 @@ export async function getFundFlow(input: FundFlowInput): Promise<FundFlow> {
         financialAccounts,
         and(
           eq(financialAccounts.id, transactions.accountId),
-          eq(financialAccounts.spaceId, transactions.spaceId),
+          eq(financialAccounts.userId, transactions.userId),
         ),
       )
       .where(and(range, sql`${transactions.type} IN ('income', 'refund')`))
@@ -1268,12 +1241,12 @@ export async function getFundFlow(input: FundFlowInput): Promise<FundFlow> {
         financialAccounts,
         and(
           eq(financialAccounts.id, transactions.accountId),
-          eq(financialAccounts.spaceId, transactions.spaceId),
+          eq(financialAccounts.userId, transactions.userId),
         ),
       )
       .leftJoin(
         categories,
-        and(eq(categories.id, transactions.categoryId), eq(categories.spaceId, transactions.spaceId)),
+        and(eq(categories.id, transactions.categoryId), eq(categories.userId, transactions.userId)),
       )
       .where(and(range, eq(transactions.type, "expense")))
       .groupBy(
@@ -1282,7 +1255,7 @@ export async function getFundFlow(input: FundFlowInput): Promise<FundFlow> {
       )
       .orderBy(sql.raw(`COALESCE(SUM("transactions"."personal_amount"), 0) DESC`)),
 
-    getSpaceCurrency(spaceId),
+    getUserBaseCurrency(actorUserId),
   ]);
 
   const income = incomeRows.map((row) => ({
@@ -1351,14 +1324,12 @@ const HARD_LOOKBACK_DAYS = 729;
 
 export async function getDailySeries(input: DailySeriesInput): Promise<DailySeries> {
   const {
-    spaceId,
     actorUserId,
     cursor,
     days,
     fromDate: requestedFloor,
   } = parseInput(dailySeriesInputSchema, input, "getDailySeries input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const today = isoDate(new Date());
   // Clamp the window end so we never fetch dates ahead of today.
@@ -1373,7 +1344,7 @@ export async function getDailySeries(input: DailySeriesInput): Promise<DailySeri
   let fromDate = shiftDate(toDate, -(days - 1));
   if (fromDate < floor) fromDate = floor;
 
-  const items = await getCashflowTrend({ spaceId, actorUserId, fromDate, toDate });
+  const items = await getCashflowTrend({ actorUserId, fromDate, toDate });
   const nextCursor = fromDate > floor ? shiftDate(fromDate, -1) : null;
 
   return { items, nextCursor };
@@ -1384,13 +1355,12 @@ export async function getDailySeries(input: DailySeriesInput): Promise<DailySeri
 // ---------------------------------------------------------------------------
 
 export async function getYearlySeries(input: YearlySeriesInput): Promise<YearlySeries> {
-  const { spaceId, actorUserId, year } = parseInput(
+  const { actorUserId, year } = parseInput(
     yearlySeriesInputSchema,
     input,
     "getYearlySeries input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const today = isoDate(new Date());
   const currentYear = new Date().getFullYear();
@@ -1405,23 +1375,23 @@ export async function getYearlySeries(input: YearlySeriesInput): Promise<YearlyS
   const [days, yearRows, currency] = await Promise.all([
     yearStart > toDate
       ? Promise.resolve<CashflowPoint[]>([])
-      : getCashflowTrend({ spaceId, actorUserId, fromDate: yearStart, toDate }),
+      : getCashflowTrend({ actorUserId, fromDate: yearStart, toDate }),
     db
       .select({ year: sql<string>`EXTRACT(YEAR FROM ${transactions.date})` })
       .from(transactions)
       .where(
         and(
-          eq(transactions.spaceId, spaceId),
+          eq(transactions.userId, actorUserId),
           eq(transactions.status, "posted"),
           isNull(transactions.deletedAt),
         ),
       )
       .groupBy(sql`EXTRACT(YEAR FROM ${transactions.date})`),
-    getSpaceCurrency(spaceId),
+    getUserBaseCurrency(actorUserId),
   ]);
 
   // The switcher offers every year that has posted activity, plus the current
-  // year (so an empty space still has one selectable entry).
+  // year (so a new user still has one selectable entry).
   const years = new Set<number>([currentYear]);
   for (const row of yearRows) {
     const value = Math.trunc(Number(row.year));

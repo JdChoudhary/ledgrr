@@ -8,7 +8,6 @@ import { budgetPeriodTypeSchema } from "@repo/services/budget/model";
 
 export const createBudgetSchema = z
   .object({
-    spaceId: uuidSchema,
     categoryId: uuidSchema,
     periodType: budgetPeriodTypeSchema,
     startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
@@ -41,7 +40,6 @@ export const createBudgetSchema = z
 
 export const updateBudgetSchema = z
   .object({
-    spaceId: uuidSchema,
     budgetId: uuidSchema,
     categoryId: uuidSchema.optional(),
     limitAmount: z.union([z.number().positive(), z.string().trim().min(1)]).optional(),
@@ -65,11 +63,9 @@ export const updateBudgetSchema = z
 
 export const budgetLookupSchema = z.object({
   budgetId: uuidSchema,
-  spaceId: uuidSchema,
 });
 
 export const listBudgetsSchema = z.object({
-  spaceId: uuidSchema,
   categoryId: uuidSchema.optional(),
   includeArchived: z.boolean().optional().default(false),
 });
@@ -80,7 +76,7 @@ export const listBudgetsSchema = z.object({
 
 export const budgetResponseSchema = z.object({
   id: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   createdBy: z.string(),
   categoryId: z.string(),
   periodType: z.string(),

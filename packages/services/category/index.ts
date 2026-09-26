@@ -11,7 +11,6 @@ import {
 } from "@repo/database/schema";
 import { ServiceError, isUniqueViolation } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember } from "../space";
 import {
   categoryLookupInputSchema,
   createCategoryInputSchema,
@@ -36,37 +35,37 @@ import {
  * the rebuildable summary tables.
  */
 
-const CATEGORY_NAME_CONSTRAINT = "categories_space_name_type_unique";
-const CATEGORY_TEMPLATE_KEY_CONSTRAINT = "categories_space_template_key_unique";
+const CATEGORY_NAME_CONSTRAINT = "categories_user_name_type_unique";
+const CATEGORY_TEMPLATE_KEY_CONSTRAINT = "categories_user_template_key_unique";
 
 const findCategory = async (
-  spaceId: string,
+  actorUserId: string,
   categoryId: string,
 ): Promise<SelectCategory | undefined> => {
   const [category] = await db
     .select()
     .from(categories)
-    .where(and(eq(categories.id, categoryId), eq(categories.spaceId, spaceId)))
+    .where(and(eq(categories.id, categoryId), eq(categories.userId, actorUserId)))
     .limit(1);
 
   return category;
 };
 
-const assertGroupInSpace = async (spaceId: string, groupId: string): Promise<void> => {
+const assertGroupForUser = async (actorUserId: string, groupId: string): Promise<void> => {
   const [group] = await db
     .select({ id: categoryGroups.id })
     .from(categoryGroups)
     .where(
       and(
         eq(categoryGroups.id, groupId),
-        eq(categoryGroups.spaceId, spaceId),
+        eq(categoryGroups.userId, actorUserId),
         isNull(categoryGroups.archivedAt),
       ),
     )
     .limit(1);
 
   if (!group) {
-    throw new ServiceError("NOT_FOUND", "Category group not found in this space");
+    throw new ServiceError("NOT_FOUND", "Category group not found for this user");
   }
 };
 
@@ -76,43 +75,41 @@ const translateCategoryWriteError = (error: unknown, name: string | undefined): 
   }
 
   if (isUniqueViolation(error, CATEGORY_TEMPLATE_KEY_CONSTRAINT)) {
-    throw new ServiceError("CONFLICT", "This template key is already used in this space");
+    throw new ServiceError("CONFLICT", "This template key is already used by this user");
   }
 
   throw error;
 };
 
 /** How many ledger rows already point at a category. */
-const countCategoryUsage = async (spaceId: string, categoryId: string): Promise<number> => {
+const countCategoryUsage = async (actorUserId: string, categoryId: string): Promise<number> => {
   const [transactionUsage] = await db
     .select({ value: count() })
     .from(transactions)
-    .where(and(eq(transactions.spaceId, spaceId), eq(transactions.categoryId, categoryId)));
+    .where(and(eq(transactions.userId, actorUserId), eq(transactions.categoryId, categoryId)));
 
   const [splitUsage] = await db
     .select({ value: count() })
     .from(transactionSplits)
-    .where(and(eq(transactionSplits.spaceId, spaceId), eq(transactionSplits.categoryId, categoryId)));
+    .where(and(eq(transactionSplits.userId, actorUserId), eq(transactionSplits.categoryId, categoryId)));
 
   return (transactionUsage?.value ?? 0) + (splitUsage?.value ?? 0);
 };
 
-/** Creates a category in a space the actor is an active member of. */
+/** Creates a category owned by the user. */
 export async function createCategory(input: CreateCategoryInput): Promise<SelectCategory> {
-  const { spaceId, actorUserId, name, type, groupId, templateKey, color, icon, sortOrder } =
+  const { actorUserId, name, type, groupId, templateKey, color, icon, sortOrder } =
     parseInput(createCategoryInputSchema, input, "createCategory input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   if (groupId) {
-    await assertGroupInSpace(spaceId, groupId);
+    await assertGroupForUser(actorUserId, groupId);
   }
 
   try {
     const [category] = await db
       .insert(categories)
       .values({
-        spaceId,
+        userId: actorUserId,
         createdBy: actorUserId,
         name,
         type,
@@ -136,15 +133,13 @@ export async function createCategory(input: CreateCategoryInput): Promise<Select
 
 /** Renames / recolors / regroups a category. */
 export async function updateCategory(input: UpdateCategoryInput): Promise<SelectCategory> {
-  const { spaceId, actorUserId, categoryId, name, type, groupId, color, icon, sortOrder } =
+  const { actorUserId, categoryId, name, type, groupId, color, icon, sortOrder } =
     parseInput(updateCategoryInputSchema, input, "updateCategory input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const existing = await findCategory(spaceId, categoryId);
+  const existing = await findCategory(actorUserId, categoryId);
 
   if (!existing) {
-    throw new ServiceError("NOT_FOUND", "Category not found in this space");
+    throw new ServiceError("NOT_FOUND", "Category not found for this user");
   }
 
   if (existing.archivedAt && type !== undefined && type !== existing.type) {
@@ -152,7 +147,7 @@ export async function updateCategory(input: UpdateCategoryInput): Promise<Select
   }
 
   if (type !== undefined && type !== existing.type) {
-    const usage = await countCategoryUsage(spaceId, categoryId);
+    const usage = await countCategoryUsage(actorUserId, categoryId);
 
     if (usage > 0) {
       throw new ServiceError(
@@ -164,18 +159,18 @@ export async function updateCategory(input: UpdateCategoryInput): Promise<Select
   }
 
   if (groupId) {
-    await assertGroupInSpace(spaceId, groupId);
+    await assertGroupForUser(actorUserId, groupId);
   }
 
   try {
     const [category] = await db
       .update(categories)
       .set({ name, type, groupId, color, icon, sortOrder })
-      .where(and(eq(categories.id, categoryId), eq(categories.spaceId, spaceId)))
+      .where(and(eq(categories.id, categoryId), eq(categories.userId, actorUserId)))
       .returning();
 
     if (!category) {
-      throw new ServiceError("NOT_FOUND", "Category not found in this space");
+      throw new ServiceError("NOT_FOUND", "Category not found for this user");
     }
 
     return category;
@@ -186,13 +181,11 @@ export async function updateCategory(input: UpdateCategoryInput): Promise<Select
 
 /** Archives a category. History keeps resolving through the archived row. */
 export async function archiveCategory(input: CategoryLookupInput): Promise<SelectCategory> {
-  const { spaceId, actorUserId, categoryId } = parseInput(
+  const { actorUserId, categoryId } = parseInput(
     categoryLookupInputSchema,
     input,
     "archiveCategory input",
   );
-
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [category] = await db
     .update(categories)
@@ -200,7 +193,7 @@ export async function archiveCategory(input: CategoryLookupInput): Promise<Selec
     .where(
       and(
         eq(categories.id, categoryId),
-        eq(categories.spaceId, spaceId),
+        eq(categories.userId, actorUserId),
         isNull(categories.archivedAt),
       ),
     )
@@ -215,22 +208,20 @@ export async function archiveCategory(input: CategoryLookupInput): Promise<Selec
 
 /** Restores an archived category. */
 export async function unarchiveCategory(input: CategoryLookupInput): Promise<SelectCategory> {
-  const { spaceId, actorUserId, categoryId } = parseInput(
+  const { actorUserId, categoryId } = parseInput(
     categoryLookupInputSchema,
     input,
     "unarchiveCategory input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   const [category] = await db
     .update(categories)
     .set({ archivedAt: null })
-    .where(and(eq(categories.id, categoryId), eq(categories.spaceId, spaceId)))
+    .where(and(eq(categories.id, categoryId), eq(categories.userId, actorUserId)))
     .returning();
 
   if (!category) {
-    throw new ServiceError("NOT_FOUND", "Category not found in this space");
+    throw new ServiceError("NOT_FOUND", "Category not found for this user");
   }
 
   return category;
@@ -262,17 +253,15 @@ export type CategoryHierarchy = {
 
 /**
  * Builds the canonical `Category Groups → Categories` + `Ungrouped Categories`
- * response for a space. Only category data — no budgets, transactions, or
+ * response for a user. Only category data — no budgets, transactions, or
  * analytics. Archived rows are excluded unless `includeArchived` is set.
  */
 export async function getCategoryHierarchy(input: ListCategoriesInput): Promise<CategoryHierarchy> {
-  const { spaceId, actorUserId, type, includeArchived } = parseInput(
+  const { actorUserId, type, includeArchived } = parseInput(
     listCategoriesInputSchema,
     input,
     "getCategoryHierarchy input",
   );
-
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [groups, categoryRows] = await Promise.all([
     db
@@ -280,7 +269,7 @@ export async function getCategoryHierarchy(input: ListCategoriesInput): Promise<
       .from(categoryGroups)
       .where(
         and(
-          eq(categoryGroups.spaceId, spaceId),
+          eq(categoryGroups.userId, actorUserId),
           includeArchived ? undefined : isNull(categoryGroups.archivedAt),
         ),
       )
@@ -294,7 +283,7 @@ export async function getCategoryHierarchy(input: ListCategoriesInput): Promise<
       .from(categories)
       .where(
         and(
-          eq(categories.spaceId, spaceId),
+          eq(categories.userId, actorUserId),
           includeArchived ? undefined : isNull(categories.archivedAt),
           type === undefined ? undefined : eq(categories.type, type),
         ),
@@ -316,37 +305,33 @@ export async function getCategoryHierarchy(input: ListCategoriesInput): Promise<
   };
 }
 
-/** Returns one category, or `null` when it is not in the space. */
+/** Returns one category, or `null` when it is not owned by the user. */
 export async function getCategory(input: CategoryLookupInput): Promise<SelectCategory | null> {
-  const { spaceId, actorUserId, categoryId } = parseInput(
+  const { actorUserId, categoryId } = parseInput(
     categoryLookupInputSchema,
     input,
     "getCategory input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  return (await findCategory(spaceId, categoryId)) ?? null;
+  return (await findCategory(actorUserId, categoryId)) ?? null;
 }
 
-/** Categories in a space, ordered for display. */
+/** Categories owned by the user, ordered for display. */
 export async function listCategories(
   input: ListCategoriesInput,
 ): Promise<ReadonlyArray<SelectCategory>> {
-  const { spaceId, actorUserId, type, groupId, includeArchived } = parseInput(
+  const { actorUserId, type, groupId, includeArchived } = parseInput(
     listCategoriesInputSchema,
     input,
     "listCategories input",
   );
-
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   return db
     .select()
     .from(categories)
     .where(
       and(
-        eq(categories.spaceId, spaceId),
+        eq(categories.userId, actorUserId),
         includeArchived ? undefined : isNull(categories.archivedAt),
         type === undefined ? undefined : eq(categories.type, type),
         groupId === undefined ? undefined : eq(categories.groupId, groupId),
@@ -358,7 +343,7 @@ export async function listCategories(
 /**
  * Merges `sourceCategoryId` into `targetCategoryId`.
  *
- * Both categories must live in the same space and share a type, otherwise
+ * Both categories must be owned by the same user and share a type, otherwise
  * historic income could silently become expense. Every reference (transactions,
  * splits, merchant defaults, budgets, recurring rules) is re-pointed inside one
  * transaction, and the source category is archived with `merged_into_id` set.
@@ -367,25 +352,23 @@ export async function listCategories(
  * rebuild job (metric_type = 'daily_category') regenerates them.
  */
 export async function mergeCategories(input: MergeCategoriesInput): Promise<SelectCategory> {
-  const { spaceId, actorUserId, sourceCategoryId, targetCategoryId } = parseInput(
+  const { actorUserId, sourceCategoryId, targetCategoryId } = parseInput(
     mergeCategoriesInputSchema,
     input,
     "mergeCategories input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   const [source, target] = await Promise.all([
-    findCategory(spaceId, sourceCategoryId),
-    findCategory(spaceId, targetCategoryId),
+    findCategory(actorUserId, sourceCategoryId),
+    findCategory(actorUserId, targetCategoryId),
   ]);
 
   if (!source) {
-    throw new ServiceError("NOT_FOUND", "Source category not found in this space");
+    throw new ServiceError("NOT_FOUND", "Source category not found for this user");
   }
 
   if (!target) {
-    throw new ServiceError("NOT_FOUND", "Target category not found in this space");
+    throw new ServiceError("NOT_FOUND", "Target category not found for this user");
   }
 
   if (target.archivedAt) {
@@ -403,14 +386,14 @@ export async function mergeCategories(input: MergeCategoriesInput): Promise<Sele
     await tx
       .update(transactions)
       .set({ categoryId: targetCategoryId, updatedBy: actorUserId })
-      .where(and(eq(transactions.spaceId, spaceId), eq(transactions.categoryId, sourceCategoryId)));
+      .where(and(eq(transactions.userId, actorUserId), eq(transactions.categoryId, sourceCategoryId)));
 
     await tx
       .update(transactionSplits)
       .set({ categoryId: targetCategoryId })
       .where(
         and(
-          eq(transactionSplits.spaceId, spaceId),
+          eq(transactionSplits.userId, actorUserId),
           eq(transactionSplits.categoryId, sourceCategoryId),
         ),
       );
@@ -419,29 +402,29 @@ export async function mergeCategories(input: MergeCategoriesInput): Promise<Sele
       .update(merchants)
       .set({ defaultCategoryId: targetCategoryId })
       .where(
-        and(eq(merchants.spaceId, spaceId), eq(merchants.defaultCategoryId, sourceCategoryId)),
+        and(eq(merchants.userId, actorUserId), eq(merchants.defaultCategoryId, sourceCategoryId)),
       );
 
     await tx
       .update(budgets)
       .set({ categoryId: targetCategoryId })
-      .where(and(eq(budgets.spaceId, spaceId), eq(budgets.categoryId, sourceCategoryId)));
+      .where(and(eq(budgets.userId, actorUserId), eq(budgets.categoryId, sourceCategoryId)));
 
     await tx
       .update(recurringRules)
       .set({ categoryId: targetCategoryId })
-      .where(and(eq(recurringRules.spaceId, spaceId), eq(recurringRules.categoryId, sourceCategoryId)));
+      .where(and(eq(recurringRules.userId, actorUserId), eq(recurringRules.categoryId, sourceCategoryId)));
 
     await tx
       .update(categories)
       .set({ mergedIntoId: targetCategoryId, archivedAt: new Date() })
-      .where(and(eq(categories.id, sourceCategoryId), eq(categories.spaceId, spaceId)));
+      .where(and(eq(categories.id, sourceCategoryId), eq(categories.userId, actorUserId)));
   });
 
-  const merged = await findCategory(spaceId, sourceCategoryId);
+  const merged = await findCategory(actorUserId, sourceCategoryId);
 
   if (!merged) {
-    throw new ServiceError("NOT_FOUND", "Source category not found in this space");
+    throw new ServiceError("NOT_FOUND", "Source category not found for this user");
   }
 
   return merged;

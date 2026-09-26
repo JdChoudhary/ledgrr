@@ -8,7 +8,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { spaces } from "./spaces";
 import { transactions } from "./transactions";
 import { user } from "./auth-schema";
 
@@ -26,9 +25,9 @@ export const transactionAdjustments = pgTable(
 
     transactionId: uuid("transaction_id").notNull(),
     adjustmentTransactionId: uuid("adjustment_transaction_id").notNull(),
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     reason: text("reason").notNull(),
 
@@ -49,13 +48,13 @@ export const transactionAdjustments = pgTable(
     ),
     foreignKey({
       name: "transaction_adjustments_transaction_fkey",
-      columns: [table.transactionId, table.spaceId],
-      foreignColumns: [transactions.id, transactions.spaceId],
+      columns: [table.transactionId, table.userId],
+      foreignColumns: [transactions.id, transactions.userId],
     }),
     foreignKey({
       name: "transaction_adjustments_adjustment_transaction_fkey",
-      columns: [table.adjustmentTransactionId, table.spaceId],
-      foreignColumns: [transactions.id, transactions.spaceId],
+      columns: [table.adjustmentTransactionId, table.userId],
+      foreignColumns: [transactions.id, transactions.userId],
     }),
   ],
 );

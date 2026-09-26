@@ -59,7 +59,7 @@ import {
 } from "~/hooks/api/debt";
 import { useSearchUsers } from "~/hooks/api/friendship";
 import { useCreateContact } from "~/hooks/api/contacts";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { useSession } from "~/lib/auth-client";
 
 /**
@@ -641,8 +641,8 @@ export function DebtsView() {
     iOwe: number;
   } | null>(null);
 
-  const spaces = useSpaces({});
-  const currency = spaces.spaces?.[0]?.space.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
   const debts = useDebts({ direction });
 

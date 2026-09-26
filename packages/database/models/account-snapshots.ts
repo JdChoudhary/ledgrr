@@ -11,7 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { currencies } from "./currencies";
 import { financialAccounts } from "./financial-accounts";
-import { spaces } from "./spaces";
+import { user } from "./auth-schema";
 
 export const accountSnapshots = pgTable(
   "account_snapshots",
@@ -19,9 +19,9 @@ export const accountSnapshots = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     accountId: uuid("account_id").notNull(),
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     snapshotDate: date("snapshot_date").notNull(),
 
@@ -39,8 +39,8 @@ export const accountSnapshots = pgTable(
     uniqueIndex("account_snapshots_account_date_unique").on(table.accountId, table.snapshotDate),
     foreignKey({
       name: "account_snapshots_account_fkey",
-      columns: [table.accountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.accountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
   ],
 );

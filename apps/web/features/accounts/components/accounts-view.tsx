@@ -55,7 +55,7 @@ import {
   useUnarchiveAccount,
   type AccountRecord,
 } from "~/hooks/api/account";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 
 import { AccountFormDialog } from "./account-form-dialog";
 
@@ -90,26 +90,19 @@ const money = (value: string | number, currency: string): string => {
 };
 
 export function AccountsView() {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
   const [typeFilter, setTypeFilter] = React.useState<string>("all");
   const [search, setSearch] = React.useState("");
   const [showArchived, setShowArchived] = React.useState(false);
 
-  const accounts = useAccounts(
-    spaceId
-      ? {
-          spaceId,
-          ...(typeFilter !== "all"
-            ? { type: typeFilter as "cash" | "bank" | "credit_card" | "wallet" | "investment" | "loan" | "other" }
-            : {}),
-          includeArchived: true,
-        }
-      : undefined,
-  );
+  const accounts = useAccounts({
+    ...(typeFilter !== "all"
+      ? { type: typeFilter as "cash" | "bank" | "credit_card" | "wallet" | "investment" | "loan" | "other" }
+      : {}),
+    includeArchived: true,
+  });
 
   const { archiveAccount } = useArchiveAccount({
     onSuccess: () => toast.success("Account archived"),
@@ -152,24 +145,8 @@ export function AccountsView() {
     return { assets, liabilities, net: assets - liabilities };
   }, [accounts.accounts]);
 
-  if (spaces.isPending) {
+  if (accounts.isPending) {
     return <AccountsSkeleton />;
-  }
-
-  if (!spaceId) {
-    return (
-      <Empty className="mt-8 border">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Wallet />
-          </EmptyMedia>
-          <EmptyTitle>No space found</EmptyTitle>
-          <EmptyDescription>
-            An account needs a space to live in. Create your personal space first.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
   }
 
   return (
@@ -231,7 +208,6 @@ export function AccountsView() {
         </Button>
 
         <AccountFormDialog
-          spaceId={spaceId}
           spaceCurrency={currency}
           trigger={
             <Button size="sm" className="ml-auto">
@@ -258,7 +234,6 @@ export function AccountsView() {
           </EmptyHeader>
           <EmptyContent>
             <AccountFormDialog
-              spaceId={spaceId}
               spaceCurrency={currency}
               trigger={
                 <Button size="sm">
@@ -283,12 +258,11 @@ export function AccountsView() {
               key={account.id}
               account={account}
               currency={currency}
-              spaceId={spaceId}
               onArchive={() =>
-                archiveAccount({ spaceId, accountId: account.id })
+                archiveAccount({ accountId: account.id })
               }
               onUnarchive={() =>
-                unarchiveAccount({ spaceId, accountId: account.id })
+                unarchiveAccount({ accountId: account.id })
               }
             />
           ))}
@@ -328,13 +302,11 @@ function SummaryCard({
 function AccountCard({
   account,
   currency,
-  spaceId,
   onArchive,
   onUnarchive,
 }: {
   account: AccountRecord;
   currency: string;
-  spaceId: string;
   onArchive: () => void;
   onUnarchive: () => void;
 }) {
@@ -453,7 +425,6 @@ function AccountCard({
 
       {/* Controlled edit dialog — opened from the card's action menu. */}
       <AccountFormDialog
-        spaceId={spaceId}
         spaceCurrency={currency}
         account={account}
         open={editOpen}

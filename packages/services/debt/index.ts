@@ -9,7 +9,7 @@ import {
 import { ServiceError, isForeignKeyViolation } from "../lib/errors";
 import { recordEvent } from "../analytics";
 import { parseInput } from "../lib/schema";
-import { assertCurrencyExists } from "../space";
+import { assertCurrencyExists } from "../currency";
 import {
   cancelDebtInputSchema,
   createDebtInputSchema,

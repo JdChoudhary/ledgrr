@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { format, addMonths } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAnalyticsDashboardData } from "~/hooks/api/analytics";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { ForecastSummary } from "./forecast-summary";
 import { ForecastChart } from "./forecast-chart";
 import { ForecastCategoryList } from "./forecast-category-list";
@@ -79,14 +79,10 @@ type ForecastPageProps = {
 };
 
 export function ForecastPage({ fromDate, toDate }: ForecastPageProps) {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const { dashboardData, isLoading } = useAnalyticsDashboardData(
-    spaceId ? { spaceId, fromDate, toDate } : undefined,
-  );
+  const { dashboardData, isLoading } = useAnalyticsDashboardData({ fromDate, toDate });
 
   const money = fmtCurrency(currency);
 

@@ -2,14 +2,12 @@ import { sql } from "drizzle-orm";
 import { check, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { currencies } from "./currencies";
 import { accountTypeEnum, accountVisibilityEnum } from "./enums";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
-// Every account belongs to exactly one space.
+// Every account belongs to exactly one user.
 //
-//   personal account   -> the space's single member
-//   shared account     -> space members govern access
-//   restricted account -> space role is an upper bound, account_grants narrows it
+//   personal account   -> default visibility
+//   restricted account -> account_grants narrows access
 //
 // `balance` is a rebuildable cache:
 //   opening_balance + sum(posted, non-deleted transactions)
@@ -18,9 +16,9 @@ export const financialAccounts = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
@@ -32,7 +30,7 @@ export const financialAccounts = pgTable(
       .notNull()
       .references(() => currencies.code),
 
-    visibility: accountVisibilityEnum("visibility").notNull().default("space"),
+    visibility: accountVisibilityEnum("visibility").notNull().default("personal"),
 
     openingBalance: numeric("opening_balance", { precision: 19, scale: 4 }).notNull().default("0"),
     balance: numeric("balance", { precision: 19, scale: 4 }).notNull().default("0"),
@@ -52,8 +50,8 @@ export const financialAccounts = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    // Enables composite space-scoped foreign keys from child tables.
-    unique("financial_accounts_id_space_id_unique").on(table.id, table.spaceId),
+    // Enables composite user-scoped foreign keys from child tables.
+    unique("financial_accounts_id_user_id_unique").on(table.id, table.userId),
     check(
       "financial_accounts_credit_limit_required_for_credit",
       sql`${table.type} NOT IN ('credit_card', 'loan') OR ${table.creditLimit} IS NOT NULL`,

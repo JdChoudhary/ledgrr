@@ -1,0 +1,643 @@
+No config path provided, using default 'drizzle.config.ts'
+Reading config file 'C:\Users\JAGDEEP\Desktop\✅Projects\ledgr\packages\database\drizzle.config.ts'
+Reading schema files:
+C:\Users\JAGDEEP\Desktop\✅Projects\ledgr\packages\database\schema.ts
+
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+[2K[1G[⣯] Pulling schema from database...
+[2K[1G[✓] Pulling schema from database...
++ daily_category_summary table will be created
+--- all table conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ user_id column will be created
+--- all column conflicts resolved ---
+
++ financial_accounts_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ category_groups_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ categories_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ merchants_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ transactions_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ tags_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ budgets_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ goals_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ import_batches_id_user_id_unique unique will be created
+--- all unique conflicts resolved ---
+
++ dashboard_layouts_user_unique unique will be created
+--- all unique conflicts resolved ---
+
++ category_groups_user_name_unique index will be created
+--- all index conflicts resolved ---
+
++ categories_user_template_key_unique index will be created
++ categories_user_name_type_unique index will be created
+--- all index conflicts resolved ---
+
++ merchants_user_normalized_name_unique index will be created
+--- all index conflicts resolved ---
+
++ merchant_aliases_user_match_pattern_unique index will be created
+--- all index conflicts resolved ---
+
++ transactions_user_date_idx index will be created
++ transactions_user_account_date_idx index will be created
+--- all index conflicts resolved ---
+
++ tags_user_name_unique index will be created
+--- all index conflicts resolved ---
+
++ budgets_user_category_idx index will be created
++ budgets_user_archived_idx index will be created
+--- all index conflicts resolved ---
+
++ goal_contributions_user_idx index will be created
+--- all index conflicts resolved ---
+
++ recurring_rules_id_user_id_unique index will be created
+--- all index conflicts resolved ---
+
++ audit_logs_actor_created_at_idx index will be created
+--- all index conflicts resolved ---
+
++ daily_account_summary_user_account_date_unique index will be created
+--- all index conflicts resolved ---
+
++ financial_snapshots_user_date_unique index will be created
+--- all index conflicts resolved ---
+
++ analytics_events_user_occurred_at_idx index will be created
+--- all index conflicts resolved ---
+
++ financial_accounts_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ category_groups_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ categories_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ merchants_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ merchant_aliases_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ transactions_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ transaction_splits_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ tags_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ transaction_tags_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ attachments_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ transaction_adjustments_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ budgets_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ budget_periods_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ goals_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ goal_contributions_goal_user_fkey foreign key will be created
++ goal_contributions_account_user_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ recurring_rules_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ recurring_rule_occurrences_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ import_batches_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ daily_account_summary_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ financial_snapshots_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ account_snapshots_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
++ analytics_rebuild_jobs_user_id_user_id_fkey foreign key will be created
+--- all foreign key conflicts resolved ---
+
+missing_hints: 71 unresolved decisions
+
+1. Rename or create  —  table  public.daily_category_summary
+   Add to --hints:
+     { "type": "rename", "kind": "table", "from": ["<schema>", "<old_name>"], "to": ["public", "daily_category_summary"] }
+     OR
+     { "type": "create", "kind": "table", "entity": ["public", "daily_category_summary"] }
+
+2. Rename or create  —  column  public.financial_accounts.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "financial_accounts", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "financial_accounts", "user_id"] }
+
+3. Rename or create  —  column  public.category_groups.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "category_groups", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "category_groups", "user_id"] }
+
+4. Rename or create  —  column  public.categories.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "categories", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "categories", "user_id"] }
+
+5. Rename or create  —  column  public.merchants.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "merchants", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "merchants", "user_id"] }
+
+6. Rename or create  —  column  public.merchant_aliases.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "merchant_aliases", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "merchant_aliases", "user_id"] }
+
+7. Rename or create  —  column  public.transactions.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transactions", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "transactions", "user_id"] }
+
+8. Rename or create  —  column  public.transaction_splits.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transaction_splits", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "transaction_splits", "user_id"] }
+
+9. Rename or create  —  column  public.tags.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "tags", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "tags", "user_id"] }
+
+10. Rename or create  —  column  public.transaction_tags.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transaction_tags", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "transaction_tags", "user_id"] }
+
+11. Rename or create  —  column  public.attachments.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "attachments", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "attachments", "user_id"] }
+
+12. Rename or create  —  column  public.transaction_adjustments.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transaction_adjustments", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "transaction_adjustments", "user_id"] }
+
+13. Rename or create  —  column  public.budgets.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "budgets", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "budgets", "user_id"] }
+
+14. Rename or create  —  column  public.budget_periods.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "budget_periods", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "budget_periods", "user_id"] }
+
+15. Rename or create  —  column  public.goals.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "goals", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "goals", "user_id"] }
+
+16. Rename or create  —  column  public.recurring_rules.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "recurring_rules", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "recurring_rules", "user_id"] }
+
+17. Rename or create  —  column  public.recurring_rule_occurrences.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "recurring_rule_occurrences", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "recurring_rule_occurrences", "user_id"] }
+
+18. Rename or create  —  column  public.import_batches.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "import_batches", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "import_batches", "user_id"] }
+
+19. Rename or create  —  column  public.daily_account_summary.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "daily_account_summary", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "daily_account_summary", "user_id"] }
+
+20. Rename or create  —  column  public.financial_snapshots.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "financial_snapshots", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "financial_snapshots", "user_id"] }
+
+21. Rename or create  —  column  public.account_snapshots.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "account_snapshots", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "account_snapshots", "user_id"] }
+
+22. Rename or create  —  column  public.analytics_rebuild_jobs.user_id
+   Add to --hints:
+     { "type": "rename", "kind": "column", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "analytics_rebuild_jobs", "user_id"] }
+     OR
+     { "type": "create", "kind": "column", "entity": ["public", "analytics_rebuild_jobs", "user_id"] }
+
+23. Rename or create  —  unique  public.financial_accounts.financial_accounts_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "financial_accounts", "financial_accounts_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "financial_accounts", "financial_accounts_id_user_id_unique"] }
+
+24. Rename or create  —  unique  public.category_groups.category_groups_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "category_groups", "category_groups_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "category_groups", "category_groups_id_user_id_unique"] }
+
+25. Rename or create  —  unique  public.categories.categories_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "categories", "categories_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "categories", "categories_id_user_id_unique"] }
+
+26. Rename or create  —  unique  public.merchants.merchants_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "merchants", "merchants_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "merchants", "merchants_id_user_id_unique"] }
+
+27. Rename or create  —  unique  public.transactions.transactions_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transactions", "transactions_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "transactions", "transactions_id_user_id_unique"] }
+
+28. Rename or create  —  unique  public.tags.tags_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "tags", "tags_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "tags", "tags_id_user_id_unique"] }
+
+29. Rename or create  —  unique  public.budgets.budgets_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "budgets", "budgets_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "budgets", "budgets_id_user_id_unique"] }
+
+30. Rename or create  —  unique  public.goals.goals_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "goals", "goals_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "goals", "goals_id_user_id_unique"] }
+
+31. Rename or create  —  unique  public.import_batches.import_batches_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "import_batches", "import_batches_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "import_batches", "import_batches_id_user_id_unique"] }
+
+32. Rename or create  —  unique  public.dashboard_layouts.dashboard_layouts_user_unique
+   Add to --hints:
+     { "type": "rename", "kind": "unique", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "dashboard_layouts", "dashboard_layouts_user_unique"] }
+     OR
+     { "type": "create", "kind": "unique", "entity": ["public", "dashboard_layouts", "dashboard_layouts_user_unique"] }
+
+33. Rename or create  —  index  public.category_groups.category_groups_user_name_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "category_groups", "category_groups_user_name_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "category_groups", "category_groups_user_name_unique"] }
+
+34. Rename or create  —  index  public.categories.categories_user_template_key_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "categories", "categories_user_template_key_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "categories", "categories_user_template_key_unique"] }
+
+35. Rename or create  —  index  public.categories.categories_user_name_type_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "categories", "categories_user_name_type_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "categories", "categories_user_name_type_unique"] }
+
+36. Rename or create  —  index  public.merchants.merchants_user_normalized_name_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "merchants", "merchants_user_normalized_name_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "merchants", "merchants_user_normalized_name_unique"] }
+
+37. Rename or create  —  index  public.merchant_aliases.merchant_aliases_user_match_pattern_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "merchant_aliases", "merchant_aliases_user_match_pattern_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "merchant_aliases", "merchant_aliases_user_match_pattern_unique"] }
+
+38. Rename or create  —  index  public.transactions.transactions_user_date_idx
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transactions", "transactions_user_date_idx"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "transactions", "transactions_user_date_idx"] }
+
+39. Rename or create  —  index  public.transactions.transactions_user_account_date_idx
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transactions", "transactions_user_account_date_idx"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "transactions", "transactions_user_account_date_idx"] }
+
+40. Rename or create  —  index  public.tags.tags_user_name_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "tags", "tags_user_name_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "tags", "tags_user_name_unique"] }
+
+41. Rename or create  —  index  public.budgets.budgets_user_category_idx
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "budgets", "budgets_user_category_idx"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "budgets", "budgets_user_category_idx"] }
+
+42. Rename or create  —  index  public.budgets.budgets_user_archived_idx
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "budgets", "budgets_user_archived_idx"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "budgets", "budgets_user_archived_idx"] }
+
+43. Rename or create  —  index  public.goal_contributions.goal_contributions_user_idx
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "goal_contributions", "goal_contributions_user_idx"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "goal_contributions", "goal_contributions_user_idx"] }
+
+44. Rename or create  —  index  public.recurring_rules.recurring_rules_id_user_id_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "recurring_rules", "recurring_rules_id_user_id_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "recurring_rules", "recurring_rules_id_user_id_unique"] }
+
+45. Rename or create  —  index  public.audit_logs.audit_logs_actor_created_at_idx
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "audit_logs", "audit_logs_actor_created_at_idx"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "audit_logs", "audit_logs_actor_created_at_idx"] }
+
+46. Rename or create  —  index  public.daily_account_summary.daily_account_summary_user_account_date_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "daily_account_summary", "daily_account_summary_user_account_date_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "daily_account_summary", "daily_account_summary_user_account_date_unique"] }
+
+47. Rename or create  —  index  public.financial_snapshots.financial_snapshots_user_date_unique
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "financial_snapshots", "financial_snapshots_user_date_unique"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "financial_snapshots", "financial_snapshots_user_date_unique"] }
+
+48. Rename or create  —  index  public.analytics_events.analytics_events_user_occurred_at_idx
+   Add to --hints:
+     { "type": "rename", "kind": "index", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "analytics_events", "analytics_events_user_occurred_at_idx"] }
+     OR
+     { "type": "create", "kind": "index", "entity": ["public", "analytics_events", "analytics_events_user_occurred_at_idx"] }
+
+49. Rename or create  —  foreign key  public.financial_accounts.financial_accounts_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "financial_accounts", "financial_accounts_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "financial_accounts", "financial_accounts_user_id_user_id_fkey"] }
+
+50. Rename or create  —  foreign key  public.category_groups.category_groups_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "category_groups", "category_groups_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "category_groups", "category_groups_user_id_user_id_fkey"] }
+
+51. Rename or create  —  foreign key  public.categories.categories_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "categories", "categories_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "categories", "categories_user_id_user_id_fkey"] }
+
+52. Rename or create  —  foreign key  public.merchants.merchants_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "merchants", "merchants_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "merchants", "merchants_user_id_user_id_fkey"] }
+
+53. Rename or create  —  foreign key  public.merchant_aliases.merchant_aliases_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "merchant_aliases", "merchant_aliases_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "merchant_aliases", "merchant_aliases_user_id_user_id_fkey"] }
+
+54. Rename or create  —  foreign key  public.transactions.transactions_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transactions", "transactions_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "transactions", "transactions_user_id_user_id_fkey"] }
+
+55. Rename or create  —  foreign key  public.transaction_splits.transaction_splits_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transaction_splits", "transaction_splits_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "transaction_splits", "transaction_splits_user_id_user_id_fkey"] }
+
+56. Rename or create  —  foreign key  public.tags.tags_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "tags", "tags_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "tags", "tags_user_id_user_id_fkey"] }
+
+57. Rename or create  —  foreign key  public.transaction_tags.transaction_tags_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transaction_tags", "transaction_tags_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "transaction_tags", "transaction_tags_user_id_user_id_fkey"] }
+
+58. Rename or create  —  foreign key  public.attachments.attachments_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "attachments", "attachments_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "attachments", "attachments_user_id_user_id_fkey"] }
+
+59. Rename or create  —  foreign key  public.transaction_adjustments.transaction_adjustments_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "transaction_adjustments", "transaction_adjustments_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "transaction_adjustments", "transaction_adjustments_user_id_user_id_fkey"] }
+
+60. Rename or create  —  foreign key  public.budgets.budgets_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "budgets", "budgets_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "budgets", "budgets_user_id_user_id_fkey"] }
+
+61. Rename or create  —  foreign key  public.budget_periods.budget_periods_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "budget_periods", "budget_periods_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "budget_periods", "budget_periods_user_id_user_id_fkey"] }
+
+62. Rename or create  —  foreign key  public.goals.goals_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "goals", "goals_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "goals", "goals_user_id_user_id_fkey"] }
+
+63. Rename or create  —  foreign key  public.goal_contributions.goal_contributions_goal_user_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "goal_contributions", "goal_contributions_goal_user_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "goal_contributions", "goal_contributions_goal_user_fkey"] }
+
+64. Rename or create  —  foreign key  public.goal_contributions.goal_contributions_account_user_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "goal_contributions", "goal_contributions_account_user_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "goal_contributions", "goal_contributions_account_user_fkey"] }
+
+65. Rename or create  —  foreign key  public.recurring_rules.recurring_rules_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "recurring_rules", "recurring_rules_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "recurring_rules", "recurring_rules_user_id_user_id_fkey"] }
+
+66. Rename or create  —  foreign key  public.recurring_rule_occurrences.recurring_rule_occurrences_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "recurring_rule_occurrences", "recurring_rule_occurrences_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "recurring_rule_occurrences", "recurring_rule_occurrences_user_id_user_id_fkey"] }
+
+67. Rename or create  —  foreign key  public.import_batches.import_batches_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "import_batches", "import_batches_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "import_batches", "import_batches_user_id_user_id_fkey"] }
+
+68. Rename or create  —  foreign key  public.daily_account_summary.daily_account_summary_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "daily_account_summary", "daily_account_summary_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "daily_account_summary", "daily_account_summary_user_id_user_id_fkey"] }
+
+69. Rename or create  —  foreign key  public.financial_snapshots.financial_snapshots_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "financial_snapshots", "financial_snapshots_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "financial_snapshots", "financial_snapshots_user_id_user_id_fkey"] }
+
+70. Rename or create  —  foreign key  public.account_snapshots.account_snapshots_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "account_snapshots", "account_snapshots_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "account_snapshots", "account_snapshots_user_id_user_id_fkey"] }
+
+71. Rename or create  —  foreign key  public.analytics_rebuild_jobs.analytics_rebuild_jobs_user_id_user_id_fkey
+   Add to --hints:
+     { "type": "rename", "kind": "foreign key", "from": ["<schema>", "<table>", "<old_name>"], "to": ["public", "analytics_rebuild_jobs", "analytics_rebuild_jobs_user_id_user_id_fkey"] }
+     OR
+     { "type": "create", "kind": "foreign key", "entity": ["public", "analytics_rebuild_jobs", "analytics_rebuild_jobs_user_id_user_id_fkey"] }
+
+Re-run with --hints '<json-array>'. Exit code 2.

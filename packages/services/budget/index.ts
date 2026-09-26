@@ -8,7 +8,6 @@ import {
 } from "@repo/database/schema";
 import { ServiceError, isUniqueViolation } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember } from "../space";
 import {
   createFirstBudgetPeriod,
   listBudgetOccurrences,
@@ -33,7 +32,7 @@ import {
  * identity (no custom names). The category group is never stored or accepted
  * here; it is always derived through budget → category → category_group.
  *
- * Duplicate protection: one active budget per (space, category) at a time.
+ * Duplicate protection: one active budget per (user, category) at a time.
  * Historical/archived budgets remain available per the lifecycle rules.
  */
 
@@ -42,33 +41,33 @@ import {
 // -------------------------------------------------------------------
 
 const findBudget = async (
-  spaceId: string,
+  actorUserId: string,
   budgetId: string,
 ): Promise<SelectBudget | undefined> => {
   const [budget] = await db
     .select()
     .from(budgets)
-    .where(and(eq(budgets.id, budgetId), eq(budgets.spaceId, spaceId)))
+    .where(and(eq(budgets.id, budgetId), eq(budgets.userId, actorUserId)))
     .limit(1);
   return budget;
 };
 
 /**
- * A budget may reference any expense category in the space. Income
+ * A budget may reference any expense category owned by the user. Income
  * categories are not budget targets, and neither are merged categories.
  */
 const assertBudgetableCategory = async (
-  spaceId: string,
+  actorUserId: string,
   categoryId: string,
 ): Promise<void> => {
   const [category] = await db
     .select({ id: categories.id, type: categories.type, mergedIntoId: categories.mergedIntoId })
     .from(categories)
-    .where(and(eq(categories.id, categoryId), eq(categories.spaceId, spaceId)))
+    .where(and(eq(categories.id, categoryId), eq(categories.userId, actorUserId)))
     .limit(1);
 
   if (!category) {
-    throw new ServiceError("NOT_FOUND", "Category not found in this space");
+    throw new ServiceError("NOT_FOUND", "Category not found for this user");
   }
   if (category.type !== "expense") {
     throw new ServiceError("VALIDATION_ERROR", "Budgets can only target expense categories");
@@ -79,11 +78,11 @@ const assertBudgetableCategory = async (
 };
 
 /**
- * Blocks a second active budget for the same (space, category). Archived
+ * Blocks a second active budget for the same (user, category). Archived
  * budgets are ignored; the budget being updated is excluded.
  */
 const assertNoConflictingActiveBudget = async (
-  spaceId: string,
+  actorUserId: string,
   categoryId: string,
   excludeBudgetId?: string,
 ): Promise<void> => {
@@ -92,7 +91,7 @@ const assertNoConflictingActiveBudget = async (
     .from(budgets)
     .where(
       and(
-        eq(budgets.spaceId, spaceId),
+        eq(budgets.userId, actorUserId),
         eq(budgets.categoryId, categoryId),
         isNull(budgets.archivedAt),
         excludeBudgetId ? ne(budgets.id, excludeBudgetId) : undefined,
@@ -103,7 +102,7 @@ const assertNoConflictingActiveBudget = async (
   if (conflict) {
     throw new ServiceError(
       "CONFLICT",
-      "This category already has an active budget in this space",
+      "This category already has an active budget for this user",
     );
   }
 };
@@ -113,13 +112,11 @@ const assertNoConflictingActiveBudget = async (
 // -------------------------------------------------------------------
 
 /**
- * Creates a budget for one category in the space. Actor must be an active
- * member. `limit_amount > 0` enforced by zod + DB CHECK; the first period
- * occurrence is materialized in the same call.
+ * Creates a budget for one category. `limit_amount > 0` enforced by zod + DB
+ * CHECK; the first period occurrence is materialized in the same call.
  */
 export async function createBudget(input: CreateBudgetInput): Promise<SelectBudget> {
   const {
-    spaceId,
     actorUserId,
     categoryId,
     periodType,
@@ -130,15 +127,14 @@ export async function createBudget(input: CreateBudgetInput): Promise<SelectBudg
     alertThresholdPercent,
   } = parseInput(createBudgetInputSchema, input, "createBudget input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-  await assertBudgetableCategory(spaceId, categoryId);
-  await assertNoConflictingActiveBudget(spaceId, categoryId);
+  await assertBudgetableCategory(actorUserId, categoryId);
+  await assertNoConflictingActiveBudget(actorUserId, categoryId);
 
   try {
     const [budget] = await db
       .insert(budgets)
       .values({
-        spaceId,
+        userId: actorUserId,
         createdBy: actorUserId,
         categoryId,
         periodType,
@@ -172,43 +168,41 @@ export async function createBudget(input: CreateBudgetInput): Promise<SelectBudg
 // Read
 // -------------------------------------------------------------------
 
-/** Returns a budget the actor can view (must be an active space member). */
+/** Returns a budget owned by the user. */
 export async function getBudget(input: BudgetLookupInput): Promise<SelectBudget> {
-  const { spaceId, actorUserId, budgetId } = parseInput(
+  const { actorUserId, budgetId } = parseInput(
     budgetLookupSchema,
     input,
     "getBudget input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const budget = await findBudget(spaceId, budgetId);
+  const budget = await findBudget(actorUserId, budgetId);
 
   if (!budget) {
-    throw new ServiceError("NOT_FOUND", "Budget not found in this space");
+    throw new ServiceError("NOT_FOUND", "Budget not found for this user");
   }
 
   return budget;
 }
 
-/** Lists budgets in the space, optionally filtered by category. */
+/** Lists the user's budgets, optionally filtered by category. */
 export async function listBudgets(
   input: ListBudgetsInput,
 ): Promise<ReadonlyArray<SelectBudget>> {
-  const { spaceId, actorUserId, categoryId, includeArchived } = parseInput(
+  const { actorUserId, categoryId, includeArchived } = parseInput(
     listBudgetsSchema,
     input,
     "listBudgets input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   return db
     .select()
     .from(budgets)
     .where(
       and(
-        eq(budgets.spaceId, spaceId),
+        eq(budgets.userId, actorUserId),
         includeArchived ? undefined : isNull(budgets.archivedAt),
         categoryId === undefined ? undefined : eq(budgets.categoryId, categoryId),
       ),
@@ -248,13 +242,12 @@ export type GroupedCategoryBudget = {
 export async function listGroupedBudgets(
   input: ListBudgetsInput,
 ): Promise<GroupedCategoryBudget> {
-  const { spaceId, actorUserId, includeArchived } = parseInput(
+  const { actorUserId, includeArchived } = parseInput(
     listBudgetsSchema,
     input,
     "listGroupedBudgets input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [groups, categoryRows, budgetRows] = await Promise.all([
     db
@@ -262,7 +255,7 @@ export async function listGroupedBudgets(
       .from(categoryGroups)
       .where(
         and(
-          eq(categoryGroups.spaceId, spaceId),
+          eq(categoryGroups.userId, actorUserId),
           includeArchived ? undefined : isNull(categoryGroups.archivedAt),
         ),
       )
@@ -277,7 +270,7 @@ export async function listGroupedBudgets(
       .from(categories)
       .where(
         and(
-          eq(categories.spaceId, spaceId),
+          eq(categories.userId, actorUserId),
           eq(categories.type, "expense"),
           includeArchived ? undefined : isNull(categories.archivedAt),
         ),
@@ -288,7 +281,7 @@ export async function listGroupedBudgets(
       .from(budgets)
       .where(
         and(
-          eq(budgets.spaceId, spaceId),
+          eq(budgets.userId, actorUserId),
           includeArchived ? undefined : isNull(budgets.archivedAt),
         ),
       ),
@@ -327,18 +320,17 @@ export async function listGroupedBudgets(
 export async function listBudgetPeriods(
   input: BudgetLookupInput,
 ): Promise<ReadonlyArray<SelectBudgetPeriod>> {
-  const { spaceId, actorUserId, budgetId } = parseInput(
+  const { actorUserId, budgetId } = parseInput(
     budgetLookupSchema,
     input,
     "listBudgetPeriods input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const budget = await findBudget(spaceId, budgetId);
+  const budget = await findBudget(actorUserId, budgetId);
 
   if (!budget) {
-    throw new ServiceError("NOT_FOUND", "Budget not found in this space");
+    throw new ServiceError("NOT_FOUND", "Budget not found for this user");
   }
 
   // Periods are materialized occurrences of the budget rule: reading them
@@ -352,12 +344,11 @@ export async function listBudgetPeriods(
 
 /**
  * Updates budget configuration: limit, rollover, alert threshold, end date,
- * and the target category. The category must belong to the same space and be
+ * and the target category. The category must be owned by the same user and be
  * budgetable. There is no budget name to set — the category is the identity.
  */
 export async function updateBudget(input: UpdateBudgetInput): Promise<SelectBudget> {
   const {
-    spaceId,
     actorUserId,
     budgetId,
     categoryId,
@@ -367,12 +358,11 @@ export async function updateBudget(input: UpdateBudgetInput): Promise<SelectBudg
     endsOn,
   } = parseInput(updateBudgetInputSchema, input, "updateBudget input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const budget = await findBudget(spaceId, budgetId);
+  const budget = await findBudget(actorUserId, budgetId);
 
   if (!budget) {
-    throw new ServiceError("NOT_FOUND", "Budget not found in this space");
+    throw new ServiceError("NOT_FOUND", "Budget not found for this user");
   }
 
   if (budget.archivedAt) {
@@ -380,8 +370,8 @@ export async function updateBudget(input: UpdateBudgetInput): Promise<SelectBudg
   }
 
   if (categoryId !== undefined && categoryId !== budget.categoryId) {
-    await assertBudgetableCategory(spaceId, categoryId);
-    await assertNoConflictingActiveBudget(spaceId, categoryId, budgetId);
+    await assertBudgetableCategory(actorUserId, categoryId);
+    await assertNoConflictingActiveBudget(actorUserId, categoryId, budgetId);
   }
 
   const [updated] = await db
@@ -393,11 +383,11 @@ export async function updateBudget(input: UpdateBudgetInput): Promise<SelectBudg
       alertThresholdPercent,
       endsOn,
     })
-    .where(and(eq(budgets.id, budgetId), eq(budgets.spaceId, spaceId)))
+    .where(and(eq(budgets.id, budgetId), eq(budgets.userId, actorUserId)))
     .returning();
 
   if (!updated) {
-    throw new ServiceError("NOT_FOUND", "Budget not found in this space");
+    throw new ServiceError("NOT_FOUND", "Budget not found for this user");
   }
 
   return updated;
@@ -408,13 +398,12 @@ export async function updateBudget(input: UpdateBudgetInput): Promise<SelectBudg
 // -------------------------------------------------------------------
 
 export async function archiveBudget(input: BudgetLookupInput): Promise<SelectBudget> {
-  const { spaceId, actorUserId, budgetId } = parseInput(
+  const { actorUserId, budgetId } = parseInput(
     budgetLookupSchema,
     input,
     "archiveBudget input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [budget] = await db
     .update(budgets)
@@ -422,7 +411,7 @@ export async function archiveBudget(input: BudgetLookupInput): Promise<SelectBud
     .where(
       and(
         eq(budgets.id, budgetId),
-        eq(budgets.spaceId, spaceId),
+        eq(budgets.userId, actorUserId),
         isNull(budgets.archivedAt),
       ),
     )
@@ -436,31 +425,30 @@ export async function archiveBudget(input: BudgetLookupInput): Promise<SelectBud
 }
 
 export async function unarchiveBudget(input: BudgetLookupInput): Promise<SelectBudget> {
-  const { spaceId, actorUserId, budgetId } = parseInput(
+  const { actorUserId, budgetId } = parseInput(
     budgetLookupSchema,
     input,
     "unarchiveBudget input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const budget = await findBudget(spaceId, budgetId);
+  const budget = await findBudget(actorUserId, budgetId);
 
   if (!budget) {
-    throw new ServiceError("NOT_FOUND", "Budget not found in this space");
+    throw new ServiceError("NOT_FOUND", "Budget not found for this user");
   }
 
   // Re-activating must respect duplicate protection.
-  await assertNoConflictingActiveBudget(spaceId, budget.categoryId, budgetId);
+  await assertNoConflictingActiveBudget(actorUserId, budget.categoryId, budgetId);
 
   const [unarchived] = await db
     .update(budgets)
     .set({ archivedAt: null })
-    .where(and(eq(budgets.id, budgetId), eq(budgets.spaceId, spaceId)))
+    .where(and(eq(budgets.id, budgetId), eq(budgets.userId, actorUserId)))
     .returning();
 
   if (!unarchived) {
-    throw new ServiceError("NOT_FOUND", "Budget not found in this space");
+    throw new ServiceError("NOT_FOUND", "Budget not found for this user");
   }
 
   return unarchived;

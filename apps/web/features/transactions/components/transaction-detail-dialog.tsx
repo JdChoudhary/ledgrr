@@ -27,7 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { cn } from "cn";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { useTransactions } from "~/hooks/api/transaction";
 import { useDebts } from "~/hooks/api/debt";
 
@@ -100,14 +100,10 @@ function DetailRow({
 // ---------------------------------------------------------------------------
 
 export function TransactionDetailDialog({ open, onOpenChange, transactionId }: Props) {
-  const spaces = useSpaces({});
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
-  const currency = space?.baseCurrency ?? "USD";
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
-  const transactions = useTransactions(
-    spaceId ? { spaceId } : undefined,
-  );
+  const transactions = useTransactions({});
 
   const row = React.useMemo(() => {
     if (!transactionId || !transactions.transactions) return null;
@@ -115,9 +111,7 @@ export function TransactionDetailDialog({ open, onOpenChange, transactionId }: P
   }, [transactionId, transactions.transactions]);
 
   // Fetch debts for this transaction's bill split
-  const debts = useDebts(
-    spaceId ? {} : null,
-  );
+  const debts = useDebts({});
 
   const splitDebts = React.useMemo(() => {
     if (!row?.billSplitId) return [];
