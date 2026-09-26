@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Bot,
+  CalendarDays,
   CircleDollarSign,
   CreditCard,
   FileUp,
@@ -105,6 +106,12 @@ export const navigation: NavigationItem[] = [
         icon: CircleDollarSign,
       },
       {
+        id: "monthly-expenses",
+        label: "Monthly Expenses",
+        href: "/dashboard/insights/monthly-expenses",
+        icon: CalendarDays,
+      },
+      {
         id: "forecast",
         label: "Forecast",
         href: "/dashboard/insights/forecast",
@@ -147,14 +154,21 @@ export const navigation: NavigationItem[] = [
   },
 
   {
+    id: "recurring",
+    label: "Recurring",
+    href: "/dashboard/recurring",
+    icon: Repeat2,
+  },
+
+  {
     id: "tools",
     label: "Tools",
     href: "/dashboard/tools",
     icon: MoreHorizontal,
     children: [
       {
-        id: "recurring",
-        label: "Recurring",
+        id: "recurring-legacy",
+        label: "Recurring (legacy)",
         href: "/dashboard/tools/recurring",
         icon: Repeat2,
       },

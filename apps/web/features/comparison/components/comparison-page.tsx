@@ -1,41 +1,43 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import api from "@/lib/api";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/currency";
+import { useMemo } from "react";
 import { format, subMonths } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAnalyticsDashboardData } from "~/hooks/api/analytics";
+import { useSpaces } from "~/hooks/api/space";
 import { ComparisonChangeCards } from "./comparison-change-cards";
 import { ComparisonIncomeExpenseChart } from "./comparison-income-expense-chart";
 import { ComparisonSavingsChart } from "./comparison-savings-chart";
 import { ComparisonCategoryChart } from "./comparison-category-chart";
 import type { MonthData, CategoryComparison } from "@/features/comparison/lib/types";
 
-interface AnalyticsResponse {
-  daily: { date: string; income: number; expense: number }[];
-  categories: { name: string; color: string; total: number }[];
-}
+const fmtCurrency = (currency: string) => (value: number): string =>
+  new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
 
-export function ComparisonPage() {
-  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsResponse>({
-    queryKey: ["analytics", "comparison"],
-    queryFn: () => api.get("/api/analytics/dashboard?months=6"),
-  });
+type ComparisonPageProps = {
+  fromDate: string;
+  toDate: string;
+};
 
-  const { data: currencySettings } = useQuery<{
-    currency?: string; currencySymbol?: string; locale?: string;
-  } | null>({
-    queryKey: ["settings"],
-    queryFn: () => api.get("/api/settings"),
-    throwOnError: false,
-  });
+export function ComparisonPage({ fromDate, toDate }: ComparisonPageProps) {
+  const spaces = useSpaces({});
+  const space = spaces.spaces?.[0]?.space;
+  const spaceId = space?.id;
+  const currency = space?.baseCurrency ?? "USD";
 
-  const fmt = (amount: number) => formatCurrency(amount, currencySettings);
+  const { dashboardData, isLoading: analyticsLoading } = useAnalyticsDashboardData(
+    spaceId ? { spaceId, fromDate, toDate } : undefined,
+  );
+
+  const money = fmtCurrency(currency);
 
   const { monthlyData, categoryComparison } = useMemo(() => {
-    const daily = analytics?.daily ?? [];
-    const cats = analytics?.categories ?? [];
+    const daily = dashboardData?.daily ?? [];
+    const cats = dashboardData?.categories ?? [];
     const now = new Date();
     const months: MonthData[] = [];
 
@@ -45,39 +47,31 @@ export function ComparisonPage() {
       const monthStr = format(monthDate, "yyyy-MM");
       const monthLabel = format(monthDate, "MMM yyyy");
 
-      const monthDays = daily.filter((d) => d.date.startsWith(monthStr));
-      const income = monthDays.reduce((s, d) => s + d.income, 0);
-      const expenses = monthDays.reduce((s, d) => s + d.expense, 0);
+      const monthDays = daily.filter((d: any) => d.date.startsWith(monthStr));
+      const income = monthDays.reduce((s: number, d: any) => s + d.income, 0);
+      const expenses = monthDays.reduce((s: number, d: any) => s + d.expense, 0);
 
       months.push({ month: monthStr, monthLabel, income, expenses, savings: income - expenses });
     }
 
     // Category comparison: current vs previous month
-    const currentMonth = format(now, "yyyy-MM");
-    const previousMonth = format(subMonths(now, 1), "yyyy-MM");
-
-    // Use category data for current month (already filtered by the API)
     const currentByCategory: Record<string, number> = {};
     for (const c of cats) {
       currentByCategory[c.name] = (currentByCategory[c.name] || 0) + c.total;
     }
 
-    // For previous month, we'd need a separate query — approximate from daily data
-    const prevCats: Record<string, number> = {};
-    // The categories endpoint returns current month only, so previous is approximate
-    // We'll use a simplified comparison
     const allCategories = new Set([...Object.keys(currentByCategory)]);
 
     const comparison: CategoryComparison[] = Array.from(allCategories)
       .map((cat) => ({
         category: cat,
         current: currentByCategory[cat] || 0,
-        previous: 0, // Will be filled when we add month-specific category data
+        previous: 0,
       }))
       .sort((a, b) => b.current - a.current);
 
     return { monthlyData: months, categoryComparison: comparison };
-  }, [analytics]);
+  }, [dashboardData]);
 
   const currentMonthData = monthlyData[monthlyData.length - 1];
   const previousMonthData = monthlyData[monthlyData.length - 2];
@@ -108,11 +102,11 @@ export function ComparisonPage() {
         previousMonthData={previousMonthData}
         incomeChange={incomeChange}
         expenseChange={expenseChange}
-        fmt={fmt}
+        fmt={money}
       />
-      <ComparisonIncomeExpenseChart monthlyData={monthlyData} fmt={fmt} />
-      <ComparisonSavingsChart monthlyData={monthlyData} fmt={fmt} />
-      <ComparisonCategoryChart categoryComparison={categoryComparison} fmt={fmt} />
+      <ComparisonIncomeExpenseChart monthlyData={monthlyData} fmt={money} />
+      <ComparisonSavingsChart monthlyData={monthlyData} fmt={money} />
+      <ComparisonCategoryChart categoryComparison={categoryComparison} fmt={money} />
     </div>
   );
 }

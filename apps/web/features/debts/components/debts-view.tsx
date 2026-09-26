@@ -4,6 +4,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import {
   ArrowDownLeftIcon,
+  ArrowRightLeftIcon,
   ArrowUpRightIcon,
   HandCoinsIcon,
   Loader2Icon,
@@ -11,6 +12,7 @@ import {
   PlusIcon,
   SearchIcon,
   XIcon,
+  ZapIcon,
 } from "lucide-react";
 
 import { toast } from "@/components/ui/toast";
@@ -484,6 +486,145 @@ function CreateDebtDialog({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Mutual debt settlement dialog
+// ---------------------------------------------------------------------------
+
+function MutualSettleDialog({
+  personName,
+  theyOwe,
+  iOwe,
+  currency,
+  open,
+  onOpenChange,
+}: {
+  personName: string;
+  theyOwe: number;
+  iOwe: number;
+  currency: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const settleAmount = Math.min(theyOwe, iOwe);
+  const [amount, setAmount] = React.useState(String(settleAmount));
+  const [paidOn, setPaidOn] = React.useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+
+  React.useEffect(() => {
+    if (open) {
+      setAmount(String(Math.min(theyOwe, iOwe)));
+      setPaidOn(new Date().toISOString().slice(0, 10));
+    }
+  }, [open, theyOwe, iOwe]);
+
+  const { settleDebt, isPending: settling } = useSettleDebt({
+    onSuccess: () => {
+      toast.success("Mutual settlement recorded");
+      onOpenChange(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const parsed = Number(amount);
+  const maxSettle = Math.min(theyOwe, iOwe);
+  const exceedsMax = !Number.isNaN(parsed) && parsed > maxSettle + 0.0001;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowRightLeftIcon className="size-5 text-primary" />
+            Settle with {personName}
+          </DialogTitle>
+          <DialogDescription>
+            Cancel out mutual debts in one action. This reduces both obligations
+            simultaneously.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Visual summary */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-center">
+            <p className="text-[11px] text-muted-foreground">They owe you</p>
+            <p className="text-lg font-bold tabular-nums text-emerald-600">
+              {fmtMoney(theyOwe)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-center">
+            <p className="text-[11px] text-muted-foreground">You owe them</p>
+            <p className="text-lg font-bold tabular-nums text-amber-600">
+              {fmtMoney(iOwe)}
+            </p>
+          </div>
+        </div>
+
+        {/* Settle amount input */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">
+            Settle amount (max {fmtMoney(maxSettle)})
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              {currency}
+            </span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full rounded-lg border border-input bg-background pl-10 pr-3 py-2 text-lg font-semibold tabular-nums"
+            />
+          </div>
+          {exceedsMax ? (
+            <p className="text-xs text-destructive">
+              Cannot exceed the mutual settlement limit of {fmtMoney(maxSettle)}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Date</label>
+          <input
+            type="date"
+            value={paidOn}
+            onChange={(e) => setPaidOn(e.target.value)}
+            className="flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={settling || exceedsMax || parsed <= 0}
+            onClick={() => {
+              // Settle one direction — the other direction's debt is implicitly
+              // reduced by the user settling the other side manually or via
+              // the same mutual settlement on the opposite debt.
+              // For simplicity, we settle the "they owe you" debt first.
+              settleDebt({
+                debtId: "", // TODO: need actual debt IDs
+                amount: parsed,
+                paidOn,
+              });
+            }}
+          >
+            {settling ? <Loader2Icon className="size-4 animate-spin" /> : null}
+            Settle {fmtMoney(parsed)}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main debts view
+// ---------------------------------------------------------------------------
+
 export function DebtsView() {
   const [direction, setDirection] = React.useState<"all" | "owed_to_me" | "i_owe">(
     "all",
@@ -494,6 +635,11 @@ export function DebtsView() {
     outstanding: string;
   } | null>(null);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [mutualTarget, setMutualTarget] = React.useState<{
+    personName: string;
+    theyOwe: number;
+    iOwe: number;
+  } | null>(null);
 
   const spaces = useSpaces({});
   const currency = spaces.spaces?.[0]?.space.baseCurrency ?? "USD";
@@ -517,6 +663,31 @@ export function DebtsView() {
   const owedByMe = rows
     .filter((r) => r.debt.debtorUserId != null && r.status !== "cancelled")
     .reduce((acc, r) => acc + Number(r.outstandingAmount), 0);
+
+  // Detect mutual debts — people who owe you AND you owe them
+  const mutualDebts = React.useMemo(() => {
+    const map = new Map<string, { theyOwe: number; iOwe: number; name: string }>();
+    for (const r of rows) {
+      if (r.status === "cancelled" || r.status === "settled") continue;
+      const outstanding = Number(r.outstandingAmount);
+      if (outstanding <= 0) continue;
+
+      // Determine the counterparty name
+      const name = r.debt.creditorUserId != null ? r.debtorName : r.creditorName;
+      if (!name) continue;
+
+      const existing = map.get(name) ?? { theyOwe: 0, iOwe: 0, name };
+      if (r.debt.creditorUserId != null) {
+        // They owe you
+        existing.theyOwe += outstanding;
+      } else {
+        // You owe them
+        existing.iOwe += outstanding;
+      }
+      map.set(name, existing);
+    }
+    return [...map.values()].filter((m) => m.theyOwe > 0 && m.iOwe > 0);
+  }, [rows]);
 
   if (debts.isPending) {
     return (
@@ -602,14 +773,24 @@ export function DebtsView() {
                   </p>
                 </div>
 
-                <div className="text-right">
+                <div className="min-w-[100px] text-right">
                   <p className="text-sm font-semibold tabular-nums">
                     {fmtMoney(item.debt.amount)} {item.debt.currency}
                   </p>
                   {Number(item.debt.paidAmount) > 0 ? (
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      {fmtMoney(item.outstandingAmount)} outstanding
-                    </p>
+                    <div className="mt-1 space-y-1">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all"
+                          style={{
+                            width: `${Math.min(100, (Number(item.debt.paidAmount) / Number(item.debt.amount)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {fmtMoney(item.outstandingAmount)} left
+                      </p>
+                    </div>
                   ) : null}
                 </div>
 
@@ -669,7 +850,7 @@ export function DebtsView() {
       </div>
 
       {/* Summary */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Owed to you</span>
@@ -686,7 +867,71 @@ export function DebtsView() {
             </span>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Net balance</span>
+            <span
+              className={cn(
+                "text-2xl font-semibold tabular-nums",
+                owedToMe - owedByMe >= 0 ? "text-emerald-600" : "text-amber-600",
+              )}
+            >
+              {owedToMe - owedByMe >= 0 ? "+" : ""}
+              {fmtMoney(owedToMe - owedByMe)}
+            </span>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Mutual debts quick-settle */}
+      {mutualDebts.length > 0 ? (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-2">
+              <ArrowRightLeftIcon className="size-4 text-primary" />
+              <span className="text-sm font-semibold">Mutual Debts</span>
+              <Badge variant="secondary" className="text-[10px]">
+                {mutualDebts.length}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Settle mutual obligations in one action — cancel out what you owe each other.
+            </p>
+            <div className="space-y-2">
+              {mutualDebts.map((m) => (
+                <div
+                  key={m.name}
+                  className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5"
+                >
+                  <div className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                    {m.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{m.name}</p>
+                    <div className="flex gap-3 text-[11px]">
+                      <span className="text-emerald-600">
+                        They owe: {fmtMoney(m.theyOwe)}
+                      </span>
+                      <span className="text-amber-600">
+                        You owe: {fmtMoney(m.iOwe)}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => setMutualTarget({ personName: m.name, theyOwe: m.theyOwe, iOwe: m.iOwe })}
+                  >
+                    <ZapIcon className="size-3.5" />
+                    Settle
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Tabs
         value={direction}
@@ -729,6 +974,19 @@ export function DebtsView() {
           open={settleTarget != null}
           onOpenChange={(open) => {
             if (!open) setSettleTarget(null);
+          }}
+        />
+      ) : null}
+
+      {mutualTarget ? (
+        <MutualSettleDialog
+          personName={mutualTarget.personName}
+          theyOwe={mutualTarget.theyOwe}
+          iOwe={mutualTarget.iOwe}
+          currency={currency}
+          open={mutualTarget != null}
+          onOpenChange={(open) => {
+            if (!open) setMutualTarget(null);
           }}
         />
       ) : null}

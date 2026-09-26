@@ -10,6 +10,7 @@ export * from "./models/exchange-rates";
 export * from "./models/spaces";
 export * from "./models/space-members";
 export * from "./models/space-invitations";
+export * from "./models/family-relationships";
 
 // Friendships & contacts
 export * from "./models/friendships";

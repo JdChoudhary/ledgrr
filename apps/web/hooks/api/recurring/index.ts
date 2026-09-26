@@ -166,6 +166,138 @@ export function useCancelRecurringRule(
   };
 }
 
+export function useRecurringOccurrences(
+  input: Parameters<typeof trpc.recurring.listOccurrences.useQuery>[0] | undefined | null,
+  opts?: QueryOpts<typeof trpc.recurring.listOccurrences.useQuery>,
+) {
+  const {
+    data: occurrences,
+    error,
+    isError,
+    isPending,
+    isPlaceholderData,
+    isFetching,
+    isFetched,
+    isLoading,
+    status,
+    refetch,
+  } = trpc.recurring.listOccurrences.useQuery(input ?? skipToken, opts as never);
+
+  return {
+    occurrences,
+    error,
+    isError,
+    isPending,
+    isPlaceholderData,
+    isFetching,
+    isFetched,
+    isLoading,
+    status,
+    refetch,
+  };
+}
+
+/**
+ * Dates a rule is due on this month, projected from its schedule. Complements
+ * `useRecurringOccurrences`, which only knows about rows that already exist.
+ */
+export function useRecurringProjectedOccurrences(
+  input: Parameters<typeof trpc.recurring.projectedOccurrences.useQuery>[0] | undefined | null,
+  opts?: QueryOpts<typeof trpc.recurring.projectedOccurrences.useQuery>,
+) {
+  const {
+    data: projectedOccurrences,
+    error,
+    isError,
+    isPending,
+    isPlaceholderData,
+    isFetching,
+    isFetched,
+    isLoading,
+    status,
+    refetch,
+  } = trpc.recurring.projectedOccurrences.useQuery(input ?? skipToken, opts as never);
+
+  return {
+    projectedOccurrences,
+    error,
+    isError,
+    isPending,
+    isPlaceholderData,
+    isFetching,
+    isFetched,
+    isLoading,
+    status,
+    refetch,
+  };
+}
+
+export function useConfirmOccurrence(
+  opts?: MutationOpts<typeof trpc.recurring.confirmOccurrence.useMutation>,
+) {
+  const utils = trpc.useUtils();
+  const {
+    mutateAsync: confirmOccurrenceAsync,
+    mutate: confirmOccurrence,
+    error,
+    isError,
+    isPending,
+    isSuccess,
+    status,
+  } = trpc.recurring.confirmOccurrence.useMutation({
+    ...(opts as any),
+    onSuccess: async (...args) => {
+      await Promise.all([
+        utils.recurring.listOccurrences.invalidate(),
+        utils.transaction.list.invalidate(),
+        utils.account.list.invalidate(),
+      ]);
+      opts?.onSuccess?.(...args);
+    },
+  });
+
+  return {
+    confirmOccurrenceAsync,
+    confirmOccurrence,
+    error,
+    isError,
+    isPending,
+    isSuccess,
+    status,
+  };
+}
+
+export function useSkipOccurrence(
+  opts?: MutationOpts<typeof trpc.recurring.skipOccurrence.useMutation>,
+) {
+  const utils = trpc.useUtils();
+  const {
+    mutateAsync: skipOccurrenceAsync,
+    mutate: skipOccurrence,
+    error,
+    isError,
+    isPending,
+    isSuccess,
+    status,
+  } = trpc.recurring.skipOccurrence.useMutation({
+    ...(opts as any),
+    onSuccess: async (...args) => {
+      await utils.recurring.listOccurrences.invalidate();
+      opts?.onSuccess?.(...args);
+    },
+  });
+
+  return {
+    skipOccurrenceAsync,
+    skipOccurrence,
+    error,
+    isError,
+    isPending,
+    isSuccess,
+    status,
+  };
+}
+
 /**
  * Lazy catch-up — posts every due auto-post occurrence for the space.
  * Fire-and-forget on load; invalidates the transaction list when something

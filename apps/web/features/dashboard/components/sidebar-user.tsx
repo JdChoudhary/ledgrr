@@ -57,7 +57,7 @@ export function SidebarUser() {
                 </>
               ) : (
                 <>
-                  <span className="truncate font-medium">{name}</span>
+                  {/* <span className="truncate font-medium">{name}</span> */}
                   <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
                 </>
               )}

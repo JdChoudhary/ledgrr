@@ -1,6 +1,8 @@
 import {
+  BriefcaseIcon,
   HomeIcon,
   HeartIcon,
+  ShieldIcon,
   UsersIcon,
   PlaneIcon,
   BeerIcon,
@@ -66,24 +68,39 @@ export const SPACE_TYPE_META: Record<
     color: "bg-emerald-500/10 text-emerald-600",
     description: "Any shared expense group",
   },
+  professional: {
+    label: "Professional",
+    icon: BriefcaseIcon,
+    color: "bg-indigo-500/10 text-indigo-600",
+    description: "Advisor access — read-only view for your clients",
+  },
 };
 
-export const ROLE_META: Record<string, { label: string; className: string }> = {
+export const ROLE_META: Record<string, { label: string; className: string; description?: string }> = {
   owner: {
     label: "Owner",
     className: "border-primary/30 bg-primary/10 text-primary",
+    description: "Full control — manages billing and members",
   },
   admin: {
     label: "Admin",
     className: "border-blue-500/30 bg-blue-500/10 text-blue-600",
+    description: "Can manage members, transactions, and settings",
   },
   member: {
     label: "Member",
     className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
+    description: "Can view and contribute transactions",
   },
   viewer: {
     label: "Viewer",
     className: "border-border bg-muted text-muted-foreground",
+    description: "Read-only access to the space",
+  },
+  advisor: {
+    label: "Advisor",
+    className: "border-indigo-500/30 bg-indigo-500/10 text-indigo-600",
+    description: "Read-only professional access — cannot modify data",
   },
 };
 

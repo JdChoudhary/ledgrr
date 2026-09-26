@@ -4,9 +4,13 @@ import * as React from "react";
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
+  BriefcaseIcon,
+  EyeIcon,
+  GraduationCapIcon,
   MoreVerticalIcon,
   PlusIcon,
   Settings2Icon,
+  ShieldIcon,
   UsersIcon,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -33,7 +37,7 @@ import {
 } from "~/hooks/api/space";
 import { cn } from "cn";
 
-import { CURRENCY_SYMBOLS, SPACE_TYPE_META } from "../lib/constants";
+import { CURRENCY_SYMBOLS, ROLE_META, SPACE_TYPE_META } from "../lib/constants";
 import { CreateSpaceDialog } from "./create-space-dialog";
 import { SpaceMembersDialog } from "./space-members-dialog";
 import { EditSpaceDialog } from "./edit-space-dialog";
@@ -210,26 +214,24 @@ export function SpacesView() {
                     </p>
                   ) : null}
 
+                  {/* Role badge */}
                   <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className={cn("text-[10px]", ROLE_META[role]?.className)}
+                    >
+                      {ROLE_META[role]?.label ?? role}
+                    </Badge>
                     <Badge
                       variant="outline"
                       className={cn("text-[10px]", meta.color)}
                     >
                       {meta.label}
                     </Badge>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px]",
-                        role === "owner"
-                          ? "border-primary/30 bg-primary/10 text-primary"
-                          : role === "admin"
-                            ? "border-blue-500/30 bg-blue-500/10 text-blue-600"
-                            : "border-border bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {role}
-                    </Badge>
+                  </div>
+
+                  {/* Capability badges */}
+                  <div className="flex flex-wrap gap-1">
                     {row.space.sharedLedger ? (
                       <Badge variant="secondary" className="text-[10px]">
                         shared ledger
@@ -243,6 +245,11 @@ export function SpacesView() {
                     {row.space.budgeting ? (
                       <Badge variant="secondary" className="text-[10px]">
                         budgets
+                      </Badge>
+                    ) : null}
+                    {row.space.goalsEnabled ? (
+                      <Badge variant="secondary" className="text-[10px]">
+                        goals
                       </Badge>
                     ) : null}
                   </div>

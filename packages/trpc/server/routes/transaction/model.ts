@@ -96,6 +96,8 @@ export const listTransactionsSchema = z.object({
   status: z.enum(["pending", "posted", "cancelled"]).optional(),
   dateFrom: dateOnly.nullable().optional(),
   dateTo: dateOnly.nullable().optional(),
+  /** Tri-state recurring filter: all | recurring only | non-recurring only */
+  recurring: z.enum(["all", "recurring", "non_recurring"]).optional().default("all"),
   limit: z.number().int().min(1).max(200).optional().default(50),
   offset: z.number().int().min(0).optional().default(0),
 });
@@ -140,6 +142,9 @@ export const transactionResponseSchema = z.object({
   description: z.string().nullable(),
   merchant: z.string().nullable(),
   notes: z.string().nullable(),
+  categoryName: z.string().nullable(),
+  categoryColor: z.string().nullable(),
+  accountName: z.string().nullable(),
   postedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

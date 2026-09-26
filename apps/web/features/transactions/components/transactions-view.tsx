@@ -6,6 +6,7 @@ import {
   ArrowDownLeftIcon,
   ArrowUpRightIcon,
   ArrowLeftRightIcon,
+  LandmarkIcon,
   Loader2Icon,
   MoreVerticalIcon,
   PauseIcon,
@@ -70,8 +71,12 @@ import {
   useResumeRecurringRule,
   useUpdateRecurringRuleStatus,
 } from "~/hooks/api/recurring";
+import { useAccounts } from "~/hooks/api/account";
+import { useCategoryOptions } from "~/hooks/api/category/hierarchy";
 
 import { TransactionFormDialog } from "./transaction-form-dialog";
+import { TransactionDetailDialog } from "./transaction-detail-dialog";
+import { MarkAsRecurringDialog } from "@/features/recurring";
 
 /**
  * Transactions list — the financial source of truth view.
@@ -119,7 +124,16 @@ export function TransactionsView() {
   const currency = space?.baseCurrency ?? "USD";
 
   const [typeFilter, setTypeFilter] = React.useState<string>("all");
+  const [recurringFilter, setRecurringFilter] = React.useState<string>("all");
   const [formOpen, setFormOpen] = React.useState(false);
+  const [detailId, setDetailId] = React.useState<string | null>(null);
+  const [markRecurringTx, setMarkRecurringTx] = React.useState<(typeof rows)[number] | null>(null);
+  const [markRecurringOpen, setMarkRecurringOpen] = React.useState(false);
+
+  const accountsQuery = useAccounts(
+    spaceId ? { spaceId, includeArchived: false } : undefined,
+  );
+  const categories = useCategoryOptions(spaceId ? { spaceId } : undefined);
 
   const transactions = useTransactions(
     spaceId
@@ -127,6 +141,9 @@ export function TransactionsView() {
           spaceId,
           ...(typeFilter !== "all"
             ? { type: typeFilter as "income" | "expense" | "transfer" | "refund" }
+            : {}),
+          ...(recurringFilter !== "all"
+            ? { recurring: recurringFilter as "recurring" | "non_recurring" }
             : {}),
         }
       : undefined,
@@ -363,15 +380,27 @@ export function TransactionsView() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={typeFilter} onValueChange={setTypeFilter}>
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="expense">Expenses</TabsTrigger>
-            <TabsTrigger value="income">Income</TabsTrigger>
-            <TabsTrigger value="transfer">Transfers</TabsTrigger>
-            <TabsTrigger value="refund">Refunds</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex flex-wrap items-center gap-2">
+          <Tabs value={typeFilter} onValueChange={setTypeFilter}>
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="expense">Expenses</TabsTrigger>
+              <TabsTrigger value="income">Income</TabsTrigger>
+              <TabsTrigger value="transfer">Transfers</TabsTrigger>
+              <TabsTrigger value="refund">Refunds</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Tabs value={recurringFilter} onValueChange={setRecurringFilter}>
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="recurring">
+                <RepeatIcon className="size-3 mr-1" />
+                Recurring
+              </TabsTrigger>
+              <TabsTrigger value="non_recurring">Non-recurring</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
         <Button onClick={() => setFormOpen(true)}>
           <PlusIcon className="size-4" />
           New transaction
@@ -417,6 +446,8 @@ export function TransactionsView() {
               <TableRow>
                 <TableHead>Amount</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Account</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead className="text-right">Your share</TableHead>
                 <TableHead className="w-10" />
@@ -430,7 +461,14 @@ export function TransactionsView() {
                 const sign =
                   row.type === "income" || row.type === "refund" ? "+" : "−";
                 return (
-                  <TableRow key={row.id}>
+                  <TableRow
+                    key={row.id}
+                    className={cn(
+                      "cursor-pointer transition-colors hover:bg-muted/50",
+                      isSplit && "border-l-2 border-l-primary/30",
+                    )}
+                    onClick={() => setDetailId(row.id)}
+                  >
                     <TableCell>
                       <span
                         className={cn(
@@ -457,6 +495,49 @@ export function TransactionsView() {
                         ) : null}
                       </span>
                     </TableCell>
+                    <TableCell>
+                      {row.type === "transfer" ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : row.categoryName ? (
+                        <Badge
+                          variant="outline"
+                          className="max-w-32 gap-1.5 font-normal"
+                        >
+                          {row.categoryColor ? (
+                            <span
+                              className="size-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: row.categoryColor }}
+                            />
+                          ) : null}
+                          <span className="truncate">{row.categoryName}</span>
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="gap-1.5 border-dashed font-normal text-muted-foreground"
+                        >
+                          <span className="size-2 shrink-0 rounded-full bg-muted-foreground/30" />
+                          Uncategorized
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-40">
+                      {row.type === "transfer" ? (
+                        <span className="text-xs text-muted-foreground">
+                          2 accounts
+                        </span>
+                      ) : row.accountName ? (
+                        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <LandmarkIcon className="size-3.5 shrink-0" />
+                          <span className="truncate">{row.accountName}</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-sm text-muted-foreground/70">
+                          <LandmarkIcon className="size-3.5 shrink-0" />
+                          No account
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {format(new Date(row.date), "MMM d, yyyy")}
                     </TableCell>
@@ -474,17 +555,39 @@ export function TransactionsView() {
                         <DropdownMenuTrigger
                           className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                           aria-label="Transaction actions"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <MoreVerticalIcon className="size-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => setPendingDelete(row)}
-                            className="text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailId(row.id);
+                            }}
                           >
-                            <TrashIcon className="size-4" />
-                            Delete
+                            View details
                           </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMarkRecurringTx(row);
+                        setMarkRecurringOpen(true);
+                      }}
+                    >
+                      <RepeatIcon className="size-4" />
+                      Mark as recurring
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingDelete(row);
+                      }}
+                      className="text-destructive"
+                    >
+                      <TrashIcon className="size-4" />
+                      Delete
+                    </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -548,6 +651,31 @@ export function TransactionsView() {
         currency={currency}
         open={formOpen}
         onOpenChange={setFormOpen}
+      />
+
+      <TransactionDetailDialog
+        open={detailId != null}
+        onOpenChange={(open) => !open && setDetailId(null)}
+        transactionId={detailId}
+      />
+
+      <MarkAsRecurringDialog
+        open={markRecurringOpen}
+        onOpenChange={setMarkRecurringOpen}
+        transaction={markRecurringTx ? {
+          id: markRecurringTx.id,
+          amount: markRecurringTx.amount,
+          description: markRecurringTx.description,
+          merchant: markRecurringTx.merchant,
+          categoryId: markRecurringTx.categoryId,
+          accountId: markRecurringTx.accountId,
+          type: markRecurringTx.type,
+          currency: markRecurringTx.currency,
+          date: markRecurringTx.date,
+        } : null}
+        spaceId={spaceId}
+        accounts={(accountsQuery.accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
+        categories={categories.items.map((c) => ({ id: c.id, name: c.name }))}
       />
     </div>
   );

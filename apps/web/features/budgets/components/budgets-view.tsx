@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Pencil,
   PlusIcon,
+  Settings2,
   Target,
 } from "lucide-react";
 
@@ -49,6 +50,7 @@ import { useSpaces } from "~/hooks/api/space";
 
 import { BudgetFormDialog, type BudgetRecord } from "./budget-form-dialog";
 import { BudgetCharts, type BudgetChartRow } from "./budget-charts";
+import { CategoryManager } from "./category-manager";
 
 type GroupedBudgets = NonNullable<
   ReturnType<typeof useGroupedBudgets>["groupedBudgets"]
@@ -233,6 +235,7 @@ export function BudgetsView() {
   const currency = space?.baseCurrency ?? "USD";
 
   const [includeArchived, setIncludeArchived] = React.useState(false);
+  const [manageCategoriesOpen, setManageCategoriesOpen] = React.useState(false);
 
   const grouped = useGroupedBudgets(
     spaceId ? { spaceId, includeArchived } : undefined,
@@ -340,11 +343,21 @@ export function BudgetsView() {
           {includeArchived ? "Hide archived" : "Show archived"}
         </Button>
 
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => setManageCategoriesOpen(true)}
+        >
+          <Settings2 />
+          Manage categories
+        </Button>
+
         <BudgetFormDialog
           spaceId={spaceId}
           spaceCurrency={currency}
           trigger={
-            <Button size="sm" className="ml-auto">
+            <Button size="sm">
               <PlusIcon />
               Create budget
             </Button>
@@ -484,6 +497,12 @@ export function BudgetsView() {
           />
         </>
       )}
+
+      <CategoryManager
+        spaceId={spaceId}
+        open={manageCategoriesOpen}
+        onOpenChange={setManageCategoriesOpen}
+      />
     </div>
   );
 }

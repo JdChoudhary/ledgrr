@@ -11,6 +11,7 @@ export const spaceTypeEnum = pgEnum("space_type", [
   "roommates",
   "trip",
   "group",
+  "professional",
 ]);
 
 export const spaceMemberRoleEnum = pgEnum("space_member_role", [
@@ -18,9 +19,10 @@ export const spaceMemberRoleEnum = pgEnum("space_member_role", [
   "admin",
   "member",
   "viewer",
+  "advisor",
 ]);
 
-export const invitationRoleEnum = pgEnum("invitation_role", ["admin", "member", "viewer"]);
+export const invitationRoleEnum = pgEnum("invitation_role", ["admin", "member", "viewer", "advisor"]);
 
 export const invitationStatusEnum = pgEnum("invitation_status", [
   "pending",
@@ -206,4 +208,12 @@ export const analyticsJobStatusEnum = pgEnum("analytics_job_status", [
   "running",
   "completed",
   "failed",
+]);
+
+// Family relationships for parent-child permission model.
+export const familyRelationshipEnum = pgEnum("family_relationship", [
+  "parent",
+  "child",
+  "guardian",
+  "dependent",
 ]);

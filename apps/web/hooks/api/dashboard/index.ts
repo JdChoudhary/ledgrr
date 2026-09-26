@@ -9,19 +9,19 @@ import { trpc } from "~/trpc/client";
  *
  * All financial numbers are computed server-side from transactions (the
  * source of truth): income / personal expense / gross / refunds, plus the
- * daily cash-flow series and per-category breakdown that feed the charts.
+ * daily cash-flow series, per-category breakdown, and account → category
+ * expense flow that feed the charts.
  */
-
-type QueryOpts<TProcedure extends (...args: any) => any> = Parameters<TProcedure>[1];
 
 type SummaryInput = Parameters<typeof trpc.dashboard.summary.useQuery>[0];
 type CashflowInput = Parameters<typeof trpc.dashboard.cashflow.useQuery>[0];
 type BreakdownInput = Parameters<typeof trpc.dashboard.categoryBreakdown.useQuery>[0];
+type FundFlowInput = Parameters<typeof trpc.dashboard.fundFlow.useQuery>[0];
 type RecentInput = Parameters<typeof trpc.dashboard.recentTransactions.useQuery>[0];
 
 export function useDashboardSummary(
   input: SummaryInput | undefined | null,
-  opts?: QueryOpts<typeof trpc.dashboard.summary.useQuery>,
+  opts?: Parameters<typeof trpc.dashboard.summary.useQuery>[1],
 ) {
   const {
     data: summary,
@@ -52,7 +52,7 @@ export function useDashboardSummary(
 
 export function useDashboardCashflow(
   input: CashflowInput | undefined | null,
-  opts?: QueryOpts<typeof trpc.dashboard.cashflow.useQuery>,
+  opts?: Parameters<typeof trpc.dashboard.cashflow.useQuery>[1],
 ) {
   const {
     data: cashflow,
@@ -83,7 +83,7 @@ export function useDashboardCashflow(
 
 export function useDashboardCategoryBreakdown(
   input: BreakdownInput | undefined | null,
-  opts?: QueryOpts<typeof trpc.dashboard.categoryBreakdown.useQuery>,
+  opts?: Parameters<typeof trpc.dashboard.categoryBreakdown.useQuery>[1],
 ) {
   const {
     data: breakdown,
@@ -112,9 +112,40 @@ export function useDashboardCategoryBreakdown(
   };
 }
 
+export function useDashboardFundFlow(
+  input: FundFlowInput | undefined | null,
+  opts?: Parameters<typeof trpc.dashboard.fundFlow.useQuery>[1],
+) {
+  const {
+    data: fundFlow,
+    error,
+    isError,
+    isPending,
+    isPlaceholderData,
+    isFetching,
+    isFetched,
+    isLoading,
+    status,
+    refetch,
+  } = trpc.dashboard.fundFlow.useQuery(input ?? skipToken, opts as never);
+
+  return {
+    fundFlow,
+    error,
+    isError,
+    isPending,
+    isPlaceholderData,
+    isFetching,
+    isFetched,
+    isLoading,
+    status,
+    refetch,
+  };
+}
+
 export function useRecentTransactions(
   input: RecentInput | undefined | null,
-  opts?: QueryOpts<typeof trpc.dashboard.recentTransactions.useQuery>,
+  opts?: Parameters<typeof trpc.dashboard.recentTransactions.useQuery>[1],
 ) {
   const {
     data: recentTransactions,

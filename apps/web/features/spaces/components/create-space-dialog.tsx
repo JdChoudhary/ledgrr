@@ -37,6 +37,7 @@ const SHAREABLE_TYPES = [
   "roommates",
   "trip",
   "group",
+  "professional",
 ] as const;
 
 type SpaceType = (typeof SHAREABLE_TYPES)[number];

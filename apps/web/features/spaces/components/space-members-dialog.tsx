@@ -3,10 +3,14 @@
 import * as React from "react";
 import {
   AtSignIcon,
+  BriefcaseIcon,
   CheckIcon,
+  EyeIcon,
+  GraduationCapIcon,
   Loader2Icon,
   MoreVerticalIcon,
   SearchIcon,
+  ShieldIcon,
   UserMinusIcon,
 } from "lucide-react";
 
@@ -44,7 +48,7 @@ import { cn } from "cn";
 
 import { ROLE_META } from "../lib/constants";
 
-const ROLES = ["admin", "member", "viewer"] as const;
+const ROLES = ["admin", "member", "viewer", "advisor"] as const;
 
 type Props = {
   open: boolean;
@@ -281,6 +285,11 @@ export function SpaceMembersDialog({
                                   <span className="inline-block size-4" />
                                 )}
                                 <span className="capitalize">{r}</span>
+                                {r === "advisor" ? (
+                                  <span className="ml-1 text-[10px] text-muted-foreground">
+                                    (read-only)
+                                  </span>
+                                ) : null}
                               </DropdownMenuItem>
                             ))}
                             <DropdownMenuSeparator />

@@ -10,25 +10,10 @@ import {
   HandCoinsIcon,
   TrendingUpIcon,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, Pie, PieChart, Cell, Tooltip, XAxis, YAxis } from "recharts";
 
 import { cn } from "cn";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -43,16 +28,31 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+
 
 import {
   useDashboardCashflow,
   useDashboardCategoryBreakdown,
+  useDashboardFundFlow,
   useDashboardSummary,
   useRecentTransactions,
 } from "~/hooks/api/dashboard";
-import { useTrackEvent } from "~/hooks/api/analytics";
+import {
+  useTrackEvent,
+  useAnalyticsComparison,
+  useAnalyticsVelocity,
+  useAnalyticsTopMerchants,
+  useAnalyticsSavingsRate,
+  useNetWorthForecast,
+  useAnalyticsDailySpend,
+  useAnalyticsMonthlyTrend,
+} from "~/hooks/api/analytics";
 import { useSpaces } from "~/hooks/api/space";
+import { FundFlowChart } from "./fund-flow-chart";
+import { SpendingHeatmap } from "./spending-heatmap";
+import { NetWorthForecastCard } from "./net-worth-forecast-card";
+import { DailySpendCard } from "./daily-spend-card";
+import { MonthlyTrendCard } from "./monthly-trend-card";
 
 /**
  * Dashboard view — headline numbers + charts + recent activity.
@@ -64,7 +64,7 @@ import { useSpaces } from "~/hooks/api/space";
  * of split expenses) — never from analytics events.
  */
 
-const CHART_COLORS = [
+const PIE_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
   "var(--chart-3)",
@@ -72,41 +72,26 @@ const CHART_COLORS = [
   "var(--chart-5)",
 ];
 
-type RangeKey = "this_month" | "last_month" | "last_30_days";
+/** Shown when there is nothing to plot (or a chart fails to render). */
+const emptyPie = (
+  <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+    No expenses in this period
+  </div>
+);
 
-const rangeBounds = (range: RangeKey): { fromDate: string; toDate: string; label: string } => {
-  const now = new Date();
-  if (range === "this_month") {
-    return {
-      fromDate: format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd"),
-      toDate: format(new Date(now.getFullYear(), now.getMonth() + 1, 0), "yyyy-MM-dd"),
-      label: "This month",
-    };
-  }
-  if (range === "last_month") {
-    return {
-      fromDate: format(new Date(now.getFullYear(), now.getMonth() - 1, 1), "yyyy-MM-dd"),
-      toDate: format(new Date(now.getFullYear(), now.getMonth(), 0), "yyyy-MM-dd"),
-      label: "Last month",
-    };
-  }
-  const from = new Date(now);
-  from.setDate(from.getDate() - 29);
-  return {
-    fromDate: format(from, "yyyy-MM-dd"),
-    toDate: format(now, "yyyy-MM-dd"),
-    label: "Last 30 days",
-  };
+type DashboardViewProps = {
+  fromDate: string;
+  toDate: string;
 };
 
-const RANGES: RangeKey[] = ["this_month", "last_month", "last_30_days"];
-
-const fmt = (currency: string) => (value: number): string =>
-  new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value);
+const fmt =
+  (currency: string) =>
+  (value: number): string =>
+    new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
 
 const TYPE_META: Record<string, { icon: React.ElementType; className: string; label: string }> = {
   income: { icon: ArrowDownLeftIcon, className: "text-emerald-600", label: "Income" },
@@ -115,14 +100,11 @@ const TYPE_META: Record<string, { icon: React.ElementType; className: string; la
   refund: { icon: ArrowDownLeftIcon, className: "text-emerald-600", label: "Refund" },
 };
 
-export function DashboardView() {
+export function DashboardView({ fromDate, toDate }: DashboardViewProps) {
   const spaces = useSpaces({});
   const space = spaces.spaces?.[0]?.space;
   const spaceId = space?.id;
   const currency = space?.baseCurrency ?? "USD";
-
-  const [range, setRange] = React.useState<RangeKey>("this_month");
-  const bounds = rangeBounds(range);
 
   // Product analytics: page-view event (client-side demo of the track hook;
   // financial events fire server-side inside the services).
@@ -138,20 +120,29 @@ export function DashboardView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceId]);
 
-  const summary = useDashboardSummary(
-    spaceId ? { spaceId, fromDate: bounds.fromDate, toDate: bounds.toDate } : undefined,
-  );
-  const cashflow = useDashboardCashflow(
-    spaceId ? { spaceId, fromDate: bounds.fromDate, toDate: bounds.toDate } : undefined,
-  );
-  const breakdown = useDashboardCategoryBreakdown(
-    spaceId ? { spaceId, fromDate: bounds.fromDate, toDate: bounds.toDate } : undefined,
-  );
+  const rangeInput = spaceId ? { spaceId, fromDate, toDate } : undefined;
+
+  const summary = useDashboardSummary(rangeInput);
+  const cashflow = useDashboardCashflow(rangeInput);
+  const breakdown = useDashboardCategoryBreakdown(rangeInput);
+  const fundFlow = useDashboardFundFlow(rangeInput);
   const recent = useRecentTransactions(spaceId ? { spaceId, limit: 8 } : undefined);
+
+  // Enhanced analytics
+  const comparison = useAnalyticsComparison(rangeInput);
+  const velocity = useAnalyticsVelocity(rangeInput);
+  const topMerchants = useAnalyticsTopMerchants(rangeInput);
+  const savingsRate = useAnalyticsSavingsRate(rangeInput);
+  const netWorthForecast = useNetWorthForecast(
+    spaceId ? { spaceId, months: 3, horizon: 6 } : undefined,
+  );
+  const dailySpend = useAnalyticsDailySpend(spaceId ? { spaceId, days: 90 } : undefined);
+  const monthlyTrend = useAnalyticsMonthlyTrend(spaceId ? { spaceId, months: 6 } : undefined);
 
   const summaryData = summary.summary;
   const cashflowData = cashflow.cashflow ?? [];
   const breakdownData = breakdown.breakdown ?? [];
+
   const recentRows = recent.recentTransactions ?? [];
 
   if (!spaceId) {
@@ -163,8 +154,7 @@ export function DashboardView() {
           </EmptyMedia>
           <EmptyTitle>No space found</EmptyTitle>
           <EmptyDescription>
-            Your dashboard lives inside a space. Create your personal space
-            first.
+            Your dashboard lives inside a space. Create your personal space first.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -172,41 +162,24 @@ export function DashboardView() {
   }
 
   const money = fmt(currency);
-  const totalPersonalExpense = breakdownData.reduce((acc, r) => acc + r.amount, 0);
 
   const cashflowConfig = {
     income: { label: "Income", color: "var(--chart-2)" },
     expense: { label: "Expense", color: "var(--chart-1)" },
   } satisfies ChartConfig;
 
-  const breakdownConfig = Object.fromEntries(
-    breakdownData.map((row, i) => [
-      row.name,
-      { label: row.name, color: CHART_COLORS[i % CHART_COLORS.length] },
-    ]),
-  ) satisfies ChartConfig;
+  const pieData = breakdownData.map((row, i) => ({
+    name: row.name,
+    value: row.amount,
+    fill: PIE_COLORS[i % PIE_COLORS.length],
+  }));
+
+  const pieConfig = {
+    name: { label: "Category", color: "var(--foreground)" },
+  } satisfies ChartConfig;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Range switcher */}
-      <div className="flex items-center gap-1 self-start rounded-xl bg-muted/50 p-1">
-        {RANGES.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setRange(key)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
-              range === key
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {rangeBounds(key).label}
-          </button>
-        ))}
-      </div>
-
       {/* Summary cards */}
       {summary.isPending ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -219,9 +192,7 @@ export function DashboardView() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-0">
-              <CardDescription className="text-xs text-muted-foreground">
-                Income
-              </CardDescription>
+              <CardDescription className="text-xs text-muted-foreground">Income</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums text-emerald-600">
                 {money(Number(summaryData?.income ?? 0))}
               </CardTitle>
@@ -283,6 +254,136 @@ export function DashboardView() {
         </div>
       )}
 
+      {/* Month-over-month comparison + savings rate + velocity */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Comparison */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">vs Last Period</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+              Month-over-month change
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {comparison.isPending ? (
+              <Skeleton className="h-20" />
+            ) : (comparison.comparison ?? []).length === 0 ? (
+              <p className="text-xs text-muted-foreground">No data</p>
+            ) : (
+              <div className="space-y-2">
+                {(comparison.comparison ?? []).map((row) => {
+                  const isPositive = row.changePercent > 0;
+                  const isNeutral = Math.abs(row.changePercent) < 1;
+                  return (
+                    <div key={row.metric} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{row.metric}</span>
+                      <span
+                        className={cn(
+                          "font-medium tabular-nums",
+                          isNeutral
+                            ? "text-muted-foreground"
+                            : isPositive
+                              ? "text-emerald-600"
+                              : "text-red-600",
+                        )}
+                      >
+                        {isNeutral
+                          ? "—"
+                          : `${isPositive ? "+" : ""}${row.changePercent.toFixed(1)}%`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Savings rate */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Savings Rate</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+              How much you keep
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {savingsRate.isPending ? (
+              <Skeleton className="h-20" />
+            ) : !savingsRate.savingsRate ? (
+              <p className="text-xs text-muted-foreground">No data</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tabular-nums">
+                    {savingsRate.savingsRate.rate.toFixed(1)}%
+                  </span>
+                  <span className="text-xs text-muted-foreground">saved</span>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Income: {money(savingsRate.savingsRate.income)}</span>
+                  <span>Spent: {money(savingsRate.savingsRate.expense)}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, savingsRate.savingsRate.rate))}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Spending velocity */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Spending Velocity</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+              Daily average & projection
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {velocity.isPending ? (
+              <Skeleton className="h-20" />
+            ) : !velocity.velocity ? (
+              <p className="text-xs text-muted-foreground">No data</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tabular-nums">
+                    {money(velocity.velocity.dailyAverage)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/day avg</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    Trend:{" "}
+                    {velocity.velocity.trend === "increasing"
+                      ? "📈 rising"
+                      : velocity.velocity.trend === "decreasing"
+                        ? "📉 falling"
+                        : "➡️ stable"}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {velocity.velocity.daysWithActivity}/{velocity.velocity.daysInPeriod} active
+                    days
+                  </span>
+                </div>
+                <div className="rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                  Projected this period:{" "}
+                  <span className="font-medium text-foreground">
+                    {money(velocity.velocity.projectedMonthEnd)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Charts: cash flow + category donut */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
@@ -329,82 +430,115 @@ export function DashboardView() {
 
         <Card>
           <CardHeader className="pb-0">
-            <CardTitle className="text-sm font-semibold">
-              Where money goes
-            </CardTitle>
+            <CardTitle className="text-sm font-semibold">Where money goes</CardTitle>
             <CardDescription className="text-xs text-muted-foreground">
               Your spending by category (your share of splits)
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-1 items-center justify-center px-2 pb-2 sm:px-4">
+          <CardContent className="px-2 pb-2 sm:px-4">
             {breakdown.isPending ? (
-              <Skeleton className="h-40 w-40 rounded-full" />
+              <Skeleton className="h-72" />
             ) : breakdownData.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                No expenses in this period
-              </div>
+              emptyPie
             ) : (
-              <div className="flex w-full flex-col items-center gap-6 sm:flex-row">
-                <div className="relative h-40 w-40 shrink-0">
-                  <ChartContainer
-                    config={breakdownConfig}
-                    className="aspect-square h-40 w-40"
-                  >
-                    <PieChart>
-                      <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                      <Pie
-                        data={breakdownData.map((row, i) => ({
-                          name: row.name,
-                          value: row.amount,
-                          fill: CHART_COLORS[i % CHART_COLORS.length],
-                        }))}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={52}
-                        outerRadius={70}
-                        strokeWidth={0}
-                      >
-                        {breakdownData.map((entry, i) => (
-                          <Cell
-                            key={entry.name}
-                            fill={CHART_COLORS[i % CHART_COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ChartContainer>
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-lg font-bold tabular-nums">
-                      {money(totalPersonalExpense)}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">spent</span>
-                  </div>
-                </div>
-                <div className="w-full min-w-0 flex-1 space-y-2 sm:w-44">
-                  {breakdownData.slice(0, 6).map((row, i) => (
-                    <div key={row.name} className="flex justify-between text-xs">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="size-2 shrink-0 rounded-full"
-                          style={{
-                            backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
-                          }}
-                        />
-                        <span className="truncate text-muted-foreground">
-                          {row.name}
-                        </span>
-                      </span>
-                      <span className="shrink-0 font-medium tabular-nums">
-                        {money(row.amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="h-72 w-full">
+                <ChartContainer config={pieConfig} className="h-full w-full">
+                  <PieChart>
+                    <Tooltip content={<ChartTooltipContent indicator="dot" nameKey="name" />} />
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={90}
+                      paddingAngle={3}
+                      cornerRadius={6}
+                      isAnimationActive
+                      animationDuration={600}
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Net worth forecast + daily spend */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <NetWorthForecastCard
+          forecast={netWorthForecast.forecast}
+          isLoading={netWorthForecast.isPending}
+        />
+        <DailySpendCard
+          dailySpend={dailySpend.dailySpend}
+          isLoading={dailySpend.isPending}
+          fmt={money}
+        />
+      </div>
+
+      {/* Monthly trend */}
+      <MonthlyTrendCard
+        rows={monthlyTrend.monthlyTrend ?? []}
+        isLoading={monthlyTrend.isPending}
+        fmt={money}
+      />
+
+      {/* Charts: fund flow (sankey) + activity heatmap */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <FundFlowChart flow={fundFlow.fundFlow} isLoading={fundFlow.isPending} fmt={money} />
+
+        <SpendingHeatmap spaceId={spaceId} fmt={money} />
+      </div>
+
+      {/* Top merchants */}
+      <Card>
+        <CardHeader className="pb-0">
+          <CardTitle className="text-sm font-semibold">Top Merchants</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground">
+            Where your money goes most
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-2 pb-2 sm:px-4">
+          {topMerchants.isPending ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12" />
+              <Skeleton className="h-12" />
+              <Skeleton className="h-12" />
+            </div>
+          ) : (topMerchants.topMerchants ?? []).length === 0 ? (
+            <div className="py-4 text-center text-sm text-muted-foreground">
+              No merchant data in this period
+            </div>
+          ) : (
+            <div className="divide-y">
+              {(topMerchants.topMerchants ?? []).map((row, i) => (
+                <div key={row.merchant} className="flex items-center gap-3 px-2 py-2.5">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{row.merchant}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {row.transactionCount} transaction{row.transactionCount === 1 ? "" : "s"} ·
+                      avg {money(row.avgAmount)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
+                    {money(row.totalAmount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent activity */}
       <Card>

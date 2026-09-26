@@ -13,6 +13,9 @@ export interface Transaction {
 }
 
 export interface MonthData {
+  // Index signature so the rows satisfy the echarts `Record<string, unknown>`
+  // data contract.
+  [key: string]: unknown;
   month: string;
   monthLabel: string;
   income: number;
@@ -21,6 +24,7 @@ export interface MonthData {
 }
 
 export interface CategoryComparison {
+  [key: string]: unknown;
   category: string;
   current: number;
   previous: number;

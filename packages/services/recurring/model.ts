@@ -179,6 +179,7 @@ export type RecurringRuleListItem = {
   categoryId: string | null;
   merchantId: string | null;
   type: "income" | "expense" | "transfer";
+  amountMode: "fixed" | "variable";
   amount: string;
   currency: string;
   description: string;
@@ -203,4 +204,69 @@ export type RuleLog = {
   scheduledFor: string;
   status: "success" | "skipped" | "failed";
   errorMessage: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Occurrences (calendar view)
+// ---------------------------------------------------------------------------
+
+export const listOccurrencesInputSchema = z.object({
+  spaceId: uuidSchema,
+  actorUserId: userIdSchema,
+  month: z.string().regex(/^\d{4}-\d{2}$/), // YYYY-MM
+});
+
+export type ListOccurrencesInput = z.input<typeof listOccurrencesInputSchema>;
+
+export type ProjectedOccurrence = {
+  /** Synthetic id: `projected:<ruleId>:<YYYY-MM-DD>`. Never persisted. */
+  id: string;
+  ruleId: string;
+  scheduledFor: string;
+  ruleDescription: string;
+  ruleAmount: string;
+  ruleCurrency: string;
+  ruleType: "income" | "expense" | "transfer";
+  ruleAmountMode: "fixed" | "variable";
+  ruleAccountId: string | null;
+  ruleCategoryId: string | null;
+  ruleMerchantId: string | null;
+  ruleFrequency: string;
+  ruleInterval: number;
+};
+
+export const confirmOccurrenceInputSchema = z.object({
+  spaceId: uuidSchema,
+  actorUserId: userIdSchema,
+  occurrenceId: uuidSchema,
+  amount: positiveMoneySchema(),
+});
+
+export type ConfirmOccurrenceInput = z.input<typeof confirmOccurrenceInputSchema>;
+
+export const skipOccurrenceInputSchema = z.object({
+  spaceId: uuidSchema,
+  actorUserId: userIdSchema,
+  occurrenceId: uuidSchema,
+  reason: z.string().trim().max(500).optional(),
+});
+
+export type SkipOccurrenceInput = z.input<typeof skipOccurrenceInputSchema>;
+
+export type OccurrenceListItem = {
+  id: string;
+  ruleId: string;
+  transactionId: string | null;
+  scheduledFor: string;
+  status: "pending" | "success" | "failed" | "skipped" | "awaiting_confirmation";
+  ruleDescription: string;
+  ruleAmount: string;
+  ruleCurrency: string;
+  ruleType: "income" | "expense" | "transfer";
+  ruleAmountMode: "fixed" | "variable";
+  ruleAccountId: string | null;
+  ruleCategoryId: string | null;
+  ruleMerchantId: string | null;
+  ruleFrequency: string;
+  ruleInterval: number;
 };

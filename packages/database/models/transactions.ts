@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   date,
   foreignKey,
@@ -23,6 +24,7 @@ import { goals } from "./goals";
 import { importBatches } from "./import-batches";
 import { merchants } from "./merchants";
 import { recurringRules } from "./recurring-rules";
+import { recurringRuleOccurrences } from "./recurring-rule-occurrences";
 import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
@@ -61,14 +63,15 @@ export const transactions = pgTable(
     merchantId: uuid("merchant_id"),
 
     recurringRuleId: uuid("recurring_rule_id"),
+    recurringRuleOccurrenceId: uuid("recurring_rule_occurrence_id"),
+    excludedFromRecurring: boolean("excluded_from_recurring").notNull().default(false),
     importBatchId: uuid("import_batch_id"),
 
     // Self references: a refund is same-space (composite FK below) while a
     // cross-space transfer counterpart legitimately lives in another space.
     refundParentId: uuid("refund_parent_id"),
-    counterpartTransactionId: uuid("counterpart_transaction_id").references(
-      (): AnyPgColumn => transactions.id,
-    ),
+    counterpartTransactionId: uuid("counterpart_transaction_id"),
+    // .references(() => transactions.id),
 
     billSplitId: uuid("bill_split_id").references(() => billSplits.id),
     debtId: uuid("debt_id").references(() => debts.id),
@@ -191,6 +194,11 @@ export const transactions = pgTable(
       columns: [table.recurringRuleId, table.spaceId],
       foreignColumns: [recurringRules.id, recurringRules.spaceId],
     }),
+    // foreignKey({
+    //   name: "transactions_recurring_occurrence_fkey",
+    //   columns: [table.recurringRuleOccurrenceId, table.spaceId],
+    //   foreignColumns: [recurringRuleOccurrences.id, recurringRuleOccurrences.spaceId],
+    // }),
     foreignKey({
       name: "transactions_import_batch_fkey",
       columns: [table.importBatchId, table.spaceId],

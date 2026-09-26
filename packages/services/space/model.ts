@@ -16,6 +16,7 @@ export const spaceTypeSchema = z.enum([
   "roommates",
   "trip",
   "group",
+  "professional",
 ]);
 
 /** Shared spaces are everything except `personal`. */
@@ -26,9 +27,10 @@ export const sharedSpaceTypeSchema = z.enum([
   "roommates",
   "trip",
   "group",
+  "professional",
 ]);
 
-export const spaceMemberRoleSchema = z.enum(["owner", "admin", "member", "viewer"]);
+export const spaceMemberRoleSchema = z.enum(["owner", "admin", "member", "viewer", "advisor"]);
 
 export type SpaceType = z.infer<typeof spaceTypeSchema>;
 export type SharedSpaceType = z.infer<typeof sharedSpaceTypeSchema>;
@@ -72,6 +74,14 @@ export const SHARED_SPACE_CAPABILITY_DEFAULTS: Record<SharedSpaceType, SpaceCapa
   trip: splitOnlyCapabilities,
   // Generic future shared context.
   group: splitOnlyCapabilities,
+  // Professional advisor space — full read, limited write.
+  professional: {
+    sharedLedger: true,
+    sharedAccounts: false,
+    billSplitting: false,
+    budgeting: true,
+    goalsEnabled: true,
+  },
 };
 
 const nameSchema = z.string().trim().min(1).max(120);

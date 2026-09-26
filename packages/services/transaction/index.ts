@@ -106,12 +106,19 @@ export type TransactionListItem = {
   description: string | null;
   merchant: string | null;
   notes: string | null;
+  /** Resolved display names; null when the reference is absent (uncategorized / no account). */
+  categoryName: string | null;
+  categoryColor: string | null;
+  accountName: string | null;
   postedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
-const toListItem = (row: SelectTransaction): TransactionListItem => ({
+const toListItem = (
+  row: SelectTransaction,
+  refs: { categoryName?: string | null; categoryColor?: string | null; accountName?: string | null } = {},
+): TransactionListItem => ({
   id: row.id,
   spaceId: row.spaceId,
   createdBy: row.createdBy,
@@ -132,6 +139,9 @@ const toListItem = (row: SelectTransaction): TransactionListItem => ({
   description: row.description,
   merchant: row.merchant,
   notes: row.notes,
+  categoryName: refs.categoryName ?? null,
+  categoryColor: refs.categoryColor ?? null,
+  accountName: refs.accountName ?? null,
   postedAt: row.postedAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -318,6 +328,45 @@ export async function createTransaction(
 
   try {
     const created = await db.transaction(async (tx): Promise<SelectTransaction> => {
+      // 0. Lock affected account rows to prevent concurrent balance reads.
+      //    SELECT FOR UPDATE serializes concurrent transactions on the same
+      //    account, preventing TOCTOU race conditions on balance validation.
+      const accountIds = [accountId, destinationAccountId].filter(
+        (id): id is string => id != null,
+      );
+      if (accountIds.length > 0) {
+        const lockedAccounts = await tx
+          .select({
+            id: financialAccounts.id,
+            balance: financialAccounts.balance,
+            type: financialAccounts.type,
+            creditLimit: financialAccounts.creditLimit,
+          })
+          .from(financialAccounts)
+          .where(
+            and(
+              eq(financialAccounts.spaceId, spaceId),
+              inArray(financialAccounts.id, accountIds),
+            ),
+          )
+          .for("update");
+
+        // Validate credit accounts have sufficient limit before proceeding.
+        for (const account of lockedAccounts) {
+          if (account.type === "credit_card" && type === "expense") {
+            const creditLimit = Number(account.creditLimit ?? 0);
+            const currentBalance = Number(account.balance);
+            const newBalance = currentBalance - Number(amount);
+            if (creditLimit > 0 && newBalance < -creditLimit) {
+              throw new ServiceError(
+                "VALIDATION_ERROR",
+                `Insufficient credit limit on ${account.id}. Available: ${(creditLimit + currentBalance).toFixed(2)}`,
+              );
+            }
+          }
+        }
+      }
+
       // 1. Optional bill split header + participant rows.
       let billSplitId: string | null = null;
       if (splitPlan) {
@@ -446,7 +495,7 @@ export async function createTransaction(
       return transaction;
     });
 
-    return toListItem(created);
+    return toListItem(created, await resolveTransactionRefs(spaceId, created));
   } catch (error) {
     if (isForeignKeyViolation(error)) {
       throw new ServiceError("VALIDATION_ERROR", "Invalid account, category, merchant or split reference");
@@ -514,6 +563,49 @@ function transactionDirection(type: SelectTransaction["type"]): 1 | -1 {
 // Read
 // -------------------------------------------------------------------
 
+/**
+ * Resolve display names for a transaction's category / account references.
+ * Absent references resolve to null — the UI shows the "Uncategorized" /
+ * "No account" fallbacks.
+ */
+async function resolveTransactionRefs(
+  spaceId: string,
+  row: Pick<SelectTransaction, "categoryId" | "accountId">,
+): Promise<{ categoryName: string | null; categoryColor: string | null; accountName: string | null }> {
+  const [categoryRow, accountRow] = await Promise.all([
+    row.categoryId
+      ? db
+          .select({ name: categories.name, color: categories.color })
+          .from(categories)
+          .where(
+            and(
+              eq(categories.id, row.categoryId),
+              eq(categories.spaceId, spaceId),
+            ),
+          )
+          .limit(1)
+      : Promise.resolve([]),
+    row.accountId
+      ? db
+          .select({ name: financialAccounts.name })
+          .from(financialAccounts)
+          .where(
+            and(
+              eq(financialAccounts.id, row.accountId),
+              eq(financialAccounts.spaceId, spaceId),
+            ),
+          )
+          .limit(1)
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    categoryName: categoryRow[0]?.name ?? null,
+    categoryColor: categoryRow[0]?.color ?? null,
+    accountName: accountRow[0]?.name ?? null,
+  };
+}
+
 export async function getTransaction(
   input: TransactionLookupInput,
 ): Promise<TransactionListItem> {
@@ -539,7 +631,7 @@ export async function getTransaction(
   if (!transaction) {
     throw new ServiceError("NOT_FOUND", "Transaction not found");
   }
-  return toListItem(transaction);
+  return toListItem(transaction, await resolveTransactionRefs(spaceId, transaction));
 }
 
 export async function listTransactions(
@@ -553,6 +645,7 @@ export async function listTransactions(
     status,
     dateFrom,
     dateTo,
+    recurring,
     limit,
     offset,
   } = parseInput(listTransactionsInputSchema, input, "listTransactions input");
@@ -566,6 +659,13 @@ export async function listTransactions(
   if (dateFrom != null) conditions.push(gte(transactions.date, dateFrom));
   if (dateTo != null) conditions.push(lte(transactions.date, dateTo));
 
+  // Recurring filter
+  if (recurring === "recurring") {
+    conditions.push(sql`${transactions.recurringRuleId} IS NOT NULL`);
+  } else if (recurring === "non_recurring") {
+    conditions.push(sql`${transactions.recurringRuleId} IS NULL`);
+  }
+
   const rows = await db
     .select()
     .from(transactions)
@@ -574,7 +674,11 @@ export async function listTransactions(
     .limit(limit)
     .offset(offset);
 
-  return rows.map(toListItem);
+  return Promise.all(
+    rows.map(async (row) =>
+      toListItem(row, await resolveTransactionRefs(spaceId, row)),
+    ),
+  );
 }
 
 // -------------------------------------------------------------------
@@ -642,6 +746,23 @@ export async function deleteTransaction(
   const delta = Number(transaction.amount) * direction;
 
   await db.transaction(async (tx) => {
+    // 0. Lock affected account rows to serialize concurrent balance mutations.
+    const accountIds = [transaction.accountId, transaction.destinationAccountId].filter(
+      (id): id is string => id != null,
+    );
+    if (accountIds.length > 0) {
+      await tx
+        .select({ id: financialAccounts.id })
+        .from(financialAccounts)
+        .where(
+          and(
+            eq(financialAccounts.spaceId, spaceId),
+            inArray(financialAccounts.id, accountIds),
+          ),
+        )
+        .for("update");
+    }
+
     // 1. Soft-delete the transaction itself.
     await tx
       .update(transactions)

@@ -5,6 +5,7 @@ import {
   getDashboardSummary,
   getCashflowTrend,
   getCategoryBreakdown,
+  getFundFlow,
 } from "@repo/services/analytics";
 import { listTransactions } from "@repo/services/transaction";
 
@@ -41,6 +42,18 @@ const categoryBreakdownRowSchema = z.object({
   categoryId: z.string().nullable(),
   name: z.string(),
   amount: z.number(),
+});
+
+const fundFlowSchema = z.object({
+  currency: z.string(),
+  income: z.array(
+    z.object({ source: z.string(), accountName: z.string(), amount: z.number() }),
+  ),
+  spending: z.array(
+    z.object({ accountName: z.string(), categoryName: z.string(), amount: z.number() }),
+  ),
+  savings: z.array(z.object({ accountName: z.string(), amount: z.number() })),
+  totals: z.object({ income: z.number(), expense: z.number(), savings: z.number() }),
 });
 
 // A light projection of the transaction list row for "recent activity".
@@ -135,6 +148,35 @@ export const dashboardRouter = router({
       });
     }),
 
+  /**
+   * The period's money end to end: income streams → the accounts they landed
+   * in → what each account spent it on, plus what it kept (feeds the sankey).
+   */
+  fundFlow: authenticatedProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: getPath("/fund-flow"),
+        tags: TAGS,
+      },
+    })
+    .input(
+      z.object({
+        spaceId: uuid,
+        fromDate: dateOnly,
+        toDate: dateOnly,
+      }),
+    )
+    .output(fundFlowSchema)
+    .query(async ({ input, ctx }) => {
+      return getFundFlow({
+        spaceId: input.spaceId,
+        actorUserId: ctx.user.id,
+        fromDate: input.fromDate,
+        toDate: input.toDate,
+      });
+    }),
+
   /** Latest activity feed (posted + pending, newest first). */
   recentTransactions: authenticatedProcedure
     .meta({
@@ -144,7 +186,9 @@ export const dashboardRouter = router({
         tags: TAGS,
       },
     })
-    .input(z.object({ spaceId: uuid, limit: z.number().int().min(1).max(20).optional().default(8) }))
+    .input(
+      z.object({ spaceId: uuid, limit: z.number().int().min(1).max(20).optional().default(8) }),
+    )
     .output(z.array(recentTransactionSchema))
     .query(async ({ input, ctx }) => {
       const rows = await listTransactions({

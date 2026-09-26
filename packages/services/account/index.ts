@@ -54,6 +54,7 @@ const ROLE_ACCESS: Record<SpaceMemberRole, EffectiveAccountAccess> = {
   admin: "manage",
   member: "contribute",
   viewer: "view",
+  advisor: "view",
 };
 
 const findAccount = async (

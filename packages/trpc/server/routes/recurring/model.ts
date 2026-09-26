@@ -94,6 +94,7 @@ export const ruleResponseSchema = z.object({
   categoryId: z.string().nullable(),
   merchantId: z.string().nullable(),
   type: z.enum(["income", "expense", "transfer"]),
+  amountMode: z.enum(["fixed", "variable"]),
   amount: z.string(),
   currency: z.string(),
   description: z.string(),
@@ -131,4 +132,61 @@ export const ruleLogResponseSchema = z.object({
   scheduledFor: z.string(),
   status: z.enum(["success", "skipped", "failed"]),
   errorMessage: z.string().nullable(),
+});
+
+// -- Occurrences (calendar view) -----------------------------------------------
+
+export const listOccurrencesSchema = z.object({
+  spaceId: uuidSchema,
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+});
+
+/**
+ * A date a rule is *due* to fall on, projected from its schedule. Not a
+ * persisted row — `id` is synthetic and there is no transaction or status.
+ */
+export const projectedOccurrenceResponseSchema = z.object({
+  id: z.string(),
+  ruleId: z.string().uuid(),
+  scheduledFor: z.string(),
+  ruleDescription: z.string(),
+  ruleAmount: z.string(),
+  ruleCurrency: z.string(),
+  ruleType: z.enum(["income", "expense", "transfer"]),
+  ruleAmountMode: z.enum(["fixed", "variable"]),
+  ruleAccountId: z.string().nullable(),
+  ruleCategoryId: z.string().nullable(),
+  ruleMerchantId: z.string().nullable(),
+  ruleFrequency: z.string(),
+  ruleInterval: z.number().int(),
+});
+
+export const confirmOccurrenceSchema = z.object({
+  spaceId: uuidSchema,
+  occurrenceId: uuidSchema,
+  amount: z.union([z.number().positive(), z.string().trim().min(1)]),
+});
+
+export const skipOccurrenceSchema = z.object({
+  spaceId: uuidSchema,
+  occurrenceId: uuidSchema,
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const occurrenceResponseSchema = z.object({
+  id: z.string().uuid(),
+  ruleId: z.string().uuid(),
+  transactionId: z.string().nullable(),
+  scheduledFor: z.string(),
+  status: z.enum(["pending", "success", "failed", "skipped", "awaiting_confirmation"]),
+  ruleDescription: z.string(),
+  ruleAmount: z.string(),
+  ruleCurrency: z.string(),
+  ruleType: z.enum(["income", "expense", "transfer"]),
+  ruleAmountMode: z.enum(["fixed", "variable"]),
+  ruleAccountId: z.string().nullable(),
+  ruleCategoryId: z.string().nullable(),
+  ruleMerchantId: z.string().nullable(),
+  ruleFrequency: z.string(),
+  ruleInterval: z.number().int(),
 });

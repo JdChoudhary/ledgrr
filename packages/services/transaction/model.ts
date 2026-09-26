@@ -151,6 +151,8 @@ export const listTransactionsInputSchema = z.object({
   status: z.enum(["pending", "posted", "cancelled"]).optional(),
   dateFrom: dateSchema.nullable().optional(),
   dateTo: dateSchema.nullable().optional(),
+  /** Tri-state recurring filter: all | recurring only | non-recurring only */
+  recurring: z.enum(["all", "recurring", "non_recurring"]).optional().default("all"),
   limit: z.number().int().min(1).max(200).optional().default(50),
   offset: z.number().int().min(0).optional().default(0),
 });

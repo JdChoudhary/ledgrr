@@ -1,4 +1,4 @@
-import { and, asc, db, eq, lte, sql } from "@repo/database";
+import { and, asc, db, eq, gte, lte, sql } from "@repo/database";
 import {
   recurringRuleOccurrences,
   recurringRules,
@@ -21,14 +21,22 @@ import {
 import {
   createRuleInputSchema,
   listRulesInputSchema,
+  listOccurrencesInputSchema,
+  confirmOccurrenceInputSchema,
+  skipOccurrenceInputSchema,
   ruleLookupSchema,
   updateRuleStatusSchema,
   type CreateRuleInput,
   type ListRulesInput,
+  type ListOccurrencesInput,
+  type ConfirmOccurrenceInput,
+  type SkipOccurrenceInput,
   type RecurringRuleListItem,
   type RuleLog,
   type RuleSplitConfig,
   type RuleSplitConfigNormalized,
+  type OccurrenceListItem,
+  type ProjectedOccurrence,
 } from "./model";
 
 /**
@@ -75,6 +83,7 @@ const toRuleListItem = (row: SelectRecurringRule): RecurringRuleListItem => ({
   categoryId: row.categoryId,
   merchantId: row.merchantId,
   type: row.type === "split_expense" ? "expense" : row.type,
+  amountMode: row.amountMode,
   amount: row.amount,
   currency: row.currency,
   description: row.description ?? "",
@@ -480,6 +489,311 @@ export async function runDueRules(input: {
   }
 
   return { posted, logged, failed };
+}
+
+// ---------------------------------------------------------------------------
+// Occurrences (calendar view)
+// ---------------------------------------------------------------------------
+
+export async function listOccurrences(
+  input: ListOccurrencesInput,
+): Promise<OccurrenceListItem[]> {
+  const parsed = parseInput(listOccurrencesInputSchema, input, "listOccurrences input");
+  const { spaceId, actorUserId, month } = parsed;
+  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+
+  // Get the first and last day of the month
+  const [year, mon] = month.split("-").map(Number);
+  const fromDate = `${year}-${String(mon).padStart(2, "0")}-01`;
+  const lastDay = new Date(Number(year), Number(mon), 0).getDate();
+  const toDate = `${year}-${String(mon).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  // Fetch occurrences for this month
+  const rows = await db
+    .select({
+      id: recurringRuleOccurrences.id,
+      ruleId: recurringRuleOccurrences.ruleId,
+      transactionId: recurringRuleOccurrences.transactionId,
+      scheduledFor: recurringRuleOccurrences.scheduledFor,
+      status: recurringRuleOccurrences.status,
+      // Rule fields
+      ruleDescription: recurringRules.description,
+      ruleAmount: recurringRules.amount,
+      ruleCurrency: recurringRules.currency,
+      ruleType: recurringRules.type,
+      ruleAmountMode: recurringRules.amountMode,
+      ruleAccountId: recurringRules.accountId,
+      ruleCategoryId: recurringRules.categoryId,
+      ruleMerchantId: recurringRules.merchantId,
+      ruleFrequency: recurringRules.frequency,
+      ruleInterval: recurringRules.interval,
+    })
+    .from(recurringRuleOccurrences)
+    .innerJoin(recurringRules, eq(recurringRuleOccurrences.ruleId, recurringRules.id))
+    .where(
+      and(
+        eq(recurringRuleOccurrences.spaceId, spaceId),
+        gte(recurringRuleOccurrences.scheduledFor, fromDate),
+        lte(recurringRuleOccurrences.scheduledFor, toDate),
+      ),
+    )
+    .orderBy(asc(recurringRuleOccurrences.scheduledFor));
+
+  return rows.map((row) => ({
+    id: row.id,
+    ruleId: row.ruleId,
+    transactionId: row.transactionId,
+    scheduledFor: row.scheduledFor,
+    status: row.status as OccurrenceListItem["status"],
+    ruleDescription: row.ruleDescription ?? "",
+    ruleAmount: row.ruleAmount,
+    ruleCurrency: row.ruleCurrency,
+    ruleType: row.ruleType === "split_expense" ? "expense" : row.ruleType,
+    ruleAmountMode: row.ruleAmountMode,
+    ruleAccountId: row.ruleAccountId,
+    ruleCategoryId: row.ruleCategoryId,
+    ruleMerchantId: row.ruleMerchantId,
+    ruleFrequency: row.ruleFrequency,
+    ruleInterval: row.ruleInterval,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Schedule projection (dates a rule WILL fall on, for the calendar)
+//
+// Occurrence rows only exist once a rule has already come due, so a calendar
+// built from them alone is empty for future months and for rules that do not
+// auto-post. This projects each active rule's schedule instead — the same
+// `computeNextRunDate` walk the runner uses — bounded by the rule's start and
+// end dates, so a rule that stops in a given month simply stops appearing.
+// ---------------------------------------------------------------------------
+
+const pad2 = (value: number): string => String(value).padStart(2, "0");
+
+/** Whole days from `a` to `b` (both YYYY-MM-DD). */
+const daysBetween = (a: string, b: string): number =>
+  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+const shiftIso = (date: string, days: number): string => {
+  const shifted = new Date(`${date}T00:00:00Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted.toISOString().slice(0, 10);
+};
+
+/**
+ * A date at or before `from` that stays phase-aligned with the schedule, so a
+ * long-running daily/weekly rule costs a couple of steps instead of one per
+ * elapsed day. Monthly and yearly rules already step by month/year.
+ */
+const projectionAnchor = (
+  rule: { frequency: string; interval: number; startDate: string },
+  from: string,
+): string => {
+  const days = daysBetween(rule.startDate, from);
+  if (days <= 0) return rule.startDate;
+  const step = Math.max(1, rule.interval);
+  if (rule.frequency === "daily") {
+    return shiftIso(rule.startDate, Math.floor(days / step) * step);
+  }
+  if (rule.frequency === "weekly") {
+    return shiftIso(rule.startDate, Math.floor(days / (7 * step)) * 7 * step);
+  }
+  return rule.startDate;
+};
+
+export async function listProjectedOccurrences(
+  input: ListOccurrencesInput,
+): Promise<ProjectedOccurrence[]> {
+  const { spaceId, actorUserId, month } = parseInput(
+    listOccurrencesInputSchema,
+    input,
+    "listProjectedOccurrences input",
+  );
+  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+
+  const [yearPart, monthPart] = month.split("-").map(Number);
+  const year = yearPart ?? new Date().getUTCFullYear();
+  const mon = monthPart ?? 1;
+  const monthStart = `${year}-${pad2(mon)}-01`;
+  const lastDay = new Date(Date.UTC(year, mon, 0)).getUTCDate();
+  const monthEnd = `${year}-${pad2(mon)}-${pad2(lastDay)}`;
+
+  const rules = await db
+    .select({
+      id: recurringRules.id,
+      description: recurringRules.description,
+      amount: recurringRules.amount,
+      currency: recurringRules.currency,
+      type: recurringRules.type,
+      amountMode: recurringRules.amountMode,
+      accountId: recurringRules.accountId,
+      categoryId: recurringRules.categoryId,
+      merchantId: recurringRules.merchantId,
+      frequency: recurringRules.frequency,
+      interval: recurringRules.interval,
+      dayOfWeek: recurringRules.dayOfWeek,
+      dayOfMonth: recurringRules.dayOfMonth,
+      startDate: recurringRules.startDate,
+      endDate: recurringRules.endDate,
+    })
+    .from(recurringRules)
+    .where(and(eq(recurringRules.spaceId, spaceId), eq(recurringRules.status, "active")));
+
+  const events: ProjectedOccurrence[] = [];
+
+  for (const rule of rules) {
+    // A rule that has not started yet, or that ended before this month, has no
+    // dates in it — that is what makes a schedule stop in a given month.
+    if (rule.startDate > monthEnd) continue;
+    const lastDate = rule.endDate && rule.endDate < monthEnd ? rule.endDate : monthEnd;
+    if (lastDate < monthStart) continue;
+
+    let cursor = projectionAnchor(rule, monthStart);
+    if (cursor < rule.startDate) cursor = rule.startDate;
+
+    let guard = 0;
+    while (cursor <= lastDate && guard < 500) {
+      guard += 1;
+      if (cursor >= monthStart && cursor >= rule.startDate) {
+        events.push({
+          id: `projected:${rule.id}:${cursor}`,
+          ruleId: rule.id,
+          scheduledFor: cursor,
+          ruleDescription: rule.description ?? "",
+          ruleAmount: rule.amount,
+          ruleCurrency: rule.currency,
+          ruleType: rule.type === "split_expense" ? "expense" : (rule.type as ProjectedOccurrence["ruleType"]),
+          ruleAmountMode: rule.amountMode,
+          ruleAccountId: rule.accountId,
+          ruleCategoryId: rule.categoryId,
+          ruleMerchantId: rule.merchantId,
+          ruleFrequency: rule.frequency,
+          ruleInterval: rule.interval,
+        });
+      }
+
+      const next = computeNextRunDate({
+        frequency: rule.frequency as RecurringFrequency,
+        interval: rule.interval,
+        dayOfWeek: rule.dayOfWeek,
+        dayOfMonth: rule.dayOfMonth,
+        fromDate: cursor,
+        inclusive: false,
+      });
+      // A malformed schedule must never spin here.
+      if (next <= cursor) break;
+      cursor = next;
+    }
+  }
+
+  events.sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
+  return events;
+}
+
+export async function confirmOccurrence(
+  input: ConfirmOccurrenceInput,
+): Promise<{ id: string; transactionId: string }> {
+  const parsed = parseInput(confirmOccurrenceInputSchema, input, "confirmOccurrence input");
+  const { spaceId, actorUserId, occurrenceId, amount } = parsed;
+  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+
+  // Load the occurrence
+  const [occurrence] = await db
+    .select()
+    .from(recurringRuleOccurrences)
+    .where(eq(recurringRuleOccurrences.id, occurrenceId))
+    .limit(1);
+
+  if (!occurrence) {
+    throw new ServiceError("NOT_FOUND", "Occurrence not found");
+  }
+  if (occurrence.spaceId !== spaceId) {
+    throw new ServiceError("FORBIDDEN", "Occurrence does not belong to this space");
+  }
+  if (occurrence.status !== "awaiting_confirmation" && occurrence.status !== "pending") {
+    throw new ServiceError("INVALID_STATE", `Cannot confirm an occurrence with status: ${occurrence.status}`);
+  }
+
+  // Load the rule
+  const [rule] = await db
+    .select()
+    .from(recurringRules)
+    .where(eq(recurringRules.id, occurrence.ruleId))
+    .limit(1);
+
+  if (!rule) {
+    throw new ServiceError("NOT_FOUND", "Recurring rule not found");
+  }
+
+  // Create the transaction
+  const transaction: TransactionListItem = await createTransaction({
+    spaceId,
+    actorUserId: rule.createdBy,
+    type: rule.type === "split_expense" ? "expense" : rule.type,
+    amount: Number(amount),
+    date: occurrence.scheduledFor,
+    accountId: rule.accountId,
+    destinationAccountId: rule.destinationAccountId,
+    categoryId: rule.categoryId,
+    merchantId: rule.merchantId,
+    currency: rule.currency,
+    description: rule.description,
+    notes: null,
+    recurringRuleId: rule.id,
+    billSplit:
+      (rule.splitConfig as RuleSplitConfig | null) != null
+        ? {
+            title: (rule.splitConfig as RuleSplitConfig).title,
+            participants: (rule.splitConfig as RuleSplitConfig).participants,
+          }
+        : null,
+  });
+
+  // Update the occurrence
+  await db
+    .update(recurringRuleOccurrences)
+    .set({
+      status: "success",
+      transactionId: transaction.id,
+      executedAt: new Date(),
+    })
+    .where(eq(recurringRuleOccurrences.id, occurrenceId));
+
+  return { id: occurrenceId, transactionId: transaction.id };
+}
+
+export async function skipOccurrence(
+  input: SkipOccurrenceInput,
+): Promise<{ id: string }> {
+  const parsed = parseInput(skipOccurrenceInputSchema, input, "skipOccurrence input");
+  const { spaceId, actorUserId, occurrenceId, reason } = parsed;
+  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
+
+  const [occurrence] = await db
+    .select()
+    .from(recurringRuleOccurrences)
+    .where(eq(recurringRuleOccurrences.id, occurrenceId))
+    .limit(1);
+
+  if (!occurrence) {
+    throw new ServiceError("NOT_FOUND", "Occurrence not found");
+  }
+  if (occurrence.spaceId !== spaceId) {
+    throw new ServiceError("FORBIDDEN", "Occurrence does not belong to this space");
+  }
+  if (occurrence.status === "success" || occurrence.status === "skipped") {
+    throw new ServiceError("INVALID_STATE", `Cannot skip an occurrence with status: ${occurrence.status}`);
+  }
+
+  await db
+    .update(recurringRuleOccurrences)
+    .set({
+      status: "skipped",
+      skippedReason: reason ?? "Skipped by user",
+    })
+    .where(eq(recurringRuleOccurrences.id, occurrenceId));
+
+  return { id: occurrenceId };
 }
 
 
