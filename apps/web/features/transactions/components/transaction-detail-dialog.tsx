@@ -10,6 +10,7 @@ import {
   ClockIcon,
   FileTextIcon,
   HashIcon,
+  PieChartIcon,
   RepeatIcon,
   RotateCcwIcon,
   UsersIcon,
@@ -205,6 +206,47 @@ export function TransactionDetailDialog({ open, onOpenChange, transactionId }: P
                 </>
               ) : null}
             </div>
+
+            {/* Category split — one amount allocated across several categories */}
+            {row.splits.length > 0 ? (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <PieChartIcon className="size-4 text-muted-foreground" />
+                    <p className="text-sm font-semibold">Split across categories</p>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {row.splits.length} categories
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-2">
+                    {row.splits.map((split, index) => (
+                      <div
+                        key={`${split.categoryId}-${index}`}
+                        className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5"
+                      >
+                        <span
+                          className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40"
+                          style={{ backgroundColor: split.categoryColor ?? undefined }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {split.categoryName ?? "Uncategorized"}
+                          </p>
+                          {split.note ? (
+                            <p className="truncate text-[10px] text-muted-foreground">{split.note}</p>
+                          ) : null}
+                        </div>
+                        <span className="text-sm font-semibold tabular-nums">
+                          {fmtMoney(split.amount, row.currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
 
             {/* Split details */}
             {isSplit ? (

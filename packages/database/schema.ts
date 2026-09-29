@@ -10,6 +10,13 @@ export * from "./models/exchange-rates";
 export * from "./models/friendships";
 export * from "./models/contacts";
 
+// Households & family sharing
+export * from "./models/households";
+export * from "./models/household-members";
+export * from "./models/household-categories";
+export * from "./models/household-category-links";
+export * from "./models/household-budgets";
+
 // Financial accounts
 export * from "./models/financial-accounts";
 export * from "./models/account-grants";

@@ -112,6 +112,10 @@ export const debtSourceTypeEnum = pgEnum("debt_source_type", ["direct", "bill_sp
 
 export const themeEnum = pgEnum("theme", ["system", "light", "dark"]);
 
+// Households group people who pool part of their finances. The owner manages
+// membership and shared items; members contribute to shared budgets.
+export const householdRoleEnum = pgEnum("household_role", ["owner", "member"]);
+
 export const notificationTypeEnum = pgEnum("notification_type", [
   "budget_limit",
   "bill_due",

@@ -51,12 +51,20 @@ const money = (value: number): string => value.toFixed(4);
  * spend; `refund` subtracts from it. Amounts are base-currency so
  * multi-currency amounts aggregate correctly.
  *
+ * Personal-share aware: only the user's own portion of a transaction counts.
+ * `personal_amount` is the full amount for a solo transaction but the
+ * creator's allocated share when the transaction has a bill split, so a shared
+ * expense never charges the whole bill to the budget (matching analytics,
+ * which sums `personal_amount`). The base-currency value is scaled by
+ * `personal_amount / amount`.
+ *
  * Category-split aware: a transaction with split lines contributes its
  * per-category share (scaled to base currency by the transaction's rate)
  * instead of its full amount; transactions without splits contribute their
  * full amount, but only when their single categoryId matches.
  */
 const categoryAllocExpr = (categoryId: string) => {
+  const personalShareRatio = sql`(${transactions.personalAmount} / NULLIF(${transactions.amount}, 0))`;
   const hasAnySplits = sql`EXISTS (
     SELECT 1 FROM ${transactionSplits} s
     WHERE s.transaction_id = ${transactions.id}
@@ -70,9 +78,9 @@ const categoryAllocExpr = (categoryId: string) => {
       AND s.category_id = ${categoryId}
   ), 0)`;
 
-  return sql`CASE WHEN ${hasAnySplits} THEN ${splitShare}
+  return sql`CASE WHEN ${hasAnySplits} THEN ${splitShare} * ${personalShareRatio}
     ELSE CASE WHEN ${transactions.categoryId} = ${categoryId}
-      THEN ${transactions.amountInBaseCurrency} ELSE 0 END
+      THEN ${transactions.amountInBaseCurrency} * ${personalShareRatio} ELSE 0 END
   END`;
 };
 

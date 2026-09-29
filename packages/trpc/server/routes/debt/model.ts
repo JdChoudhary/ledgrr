@@ -67,6 +67,13 @@ export const cancelDebtSchema = z.object({
   debtId: uuidSchema,
 });
 
+export const settleMutualSchema = z.object({
+  counterpartyUserId: z.string().trim().min(1).max(255),
+  amount: positiveMoney,
+  paidOn: dateOnly.nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+
 export const counterpartyBalanceSchema = z.object({
   counterpartyUserId: z.string().trim().min(1).max(255),
 });
@@ -107,4 +114,14 @@ export const counterpartyBalanceResponseSchema = z.object({
   theyOwe: z.string(),
   owedByMe: z.string(),
   net: z.string(),
+});
+
+/** Outcome of cancelling out mutual debts with one counterparty. */
+export const mutualSettlementResponseSchema = z.object({
+  offsetAmount: z.string(),
+  currency: z.string(),
+  debtIds: z.array(z.string()),
+  theyOweAfter: z.string(),
+  owedByMeAfter: z.string(),
+  netAfter: z.string(),
 });

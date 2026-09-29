@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
-import { motion } from "motion/react";
-import type { ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { useState, type ReactNode } from "react";
 import {
   ArrowRight,
+  Menu,
   ArrowUpRight,
   ArrowDownRight,
   Check,
@@ -32,6 +33,22 @@ import {
 
 const container = "mx-auto max-w-6xl px-5 sm:px-8";
 
+const NAV_ITEMS: [string, string][] = [
+  ["Product", "#product"],
+  ["Features", "#features"],
+  ["Demo", "#demo"],
+  ["Pricing", "#pricing"],
+];
+
+// Shared CTA styles so the primary/secondary actions stay visually identical
+// and always expose a keyboard focus ring.
+const ctaPrimary =
+  "inline-flex h-11 items-center gap-2 rounded-lg bg-foreground px-6 text-[13px] font-medium text-background transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const ctaSecondary =
+  "inline-flex h-11 items-center gap-2 rounded-lg border border-border px-5 text-[13px] font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const navLink =
+  "rounded-md text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
 function FadeUp({
   children,
   delay = 0,
@@ -41,16 +58,66 @@ function FadeUp({
   delay?: number;
   className?: string;
 }) {
+  // Honour the OS "reduce motion" preference: content still appears, it just
+  // doesn't slide in.
+  const reduceMotion = useReducedMotion();
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.55, delay, ease: [0.16, 1, 0.3, 1] }}
+      transition={{
+        duration: reduceMotion ? 0 : 0.55,
+        delay: reduceMotion ? 0 : delay,
+        ease: [0.16, 1, 0.3, 1],
+      }}
       className={className}
     >
       {children}
     </motion.div>
+  );
+}
+
+/** Collapsible navigation for small screens (the desktop list is hidden below md). */
+function MobileNav() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="md:hidden">
+      <button
+        type="button"
+        aria-label={open ? "Close menu" : "Open menu"}
+        aria-expanded={open}
+        aria-controls="landing-mobile-nav"
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+      </button>
+
+      {open ? (
+        <nav
+          id="landing-mobile-nav"
+          aria-label="Primary"
+          className="absolute inset-x-0 top-16 border-b border-border/40 bg-background/95 backdrop-blur-xl"
+        >
+          <ul className="mx-auto max-w-6xl space-y-0.5 px-5 py-3 sm:px-8">
+            {NAV_ITEMS.map(([label, href]) => (
+              <li key={href}>
+                <a
+                  href={href}
+                  onClick={() => setOpen(false)}
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+    </div>
   );
 }
 
@@ -80,6 +147,14 @@ const negativeText = "text-rose-600 dark:text-rose-400";
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
+      {/* Keyboard users can jump straight past the navigation. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-foreground focus:px-4 focus:py-2 focus:text-[13px] focus:font-medium focus:text-background"
+      >
+        Skip to content
+      </a>
+
       {/* ── Navigation ─────────────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur-xl">
         <div className={`${container} flex h-16 items-center justify-between`}>
@@ -92,44 +167,38 @@ export default function LandingPage() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-7 md:flex">
-            {[
-              ["Product", "#product"],
-              ["Features", "#features"],
-              ["Demo", "#demo"],
-              ["Pricing", "#pricing"],
-            ].map(([label, href]) => (
-              <a
-                key={href}
-                href={href}
-                className="text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
+          <nav aria-label="Primary" className="hidden items-center gap-7 md:flex">
+            {NAV_ITEMS.map(([label, href]) => (
+              <a key={href} href={href} className={navLink}>
                 {label}
               </a>
             ))}
           </nav>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
+            <Link href="/login" className={`hidden sm:inline-flex ${navLink}`}>
               Sign in
             </Link>
             <Link
               href="/register"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-foreground px-4 text-[13px] font-medium text-background transition-opacity hover:opacity-90"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-foreground px-4 text-[13px] font-medium text-background transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Get started
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
+            <MobileNav />
           </div>
         </div>
       </header>
 
+      <main id="main" tabIndex={-1} className="scroll-mt-20 focus:outline-none">
+
       {/* ── Hero ───────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.05),transparent_60%)]" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.05),transparent_60%)]"
+        />
         <div
           className={`${container} relative grid items-center gap-14 py-20 md:py-28 lg:grid-cols-2`}
         >
@@ -154,17 +223,11 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link
-                href="/register"
-                className="inline-flex h-11 items-center gap-2 rounded-lg bg-foreground px-6 text-[13px] font-medium text-background transition-opacity hover:opacity-90"
-              >
+              <Link href="/register" className={ctaPrimary}>
                 Start free
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                href="#product"
-                className="inline-flex h-11 items-center gap-2 rounded-lg border border-border px-5 text-[13px] font-medium transition-colors hover:bg-muted"
-              >
+              <Link href="#product" className={ctaSecondary}>
                 See how it works
               </Link>
             </div>
@@ -305,7 +368,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Problem → Solution ──────────────────────────────── */}
-      <section id="product" className="border-b border-border/40">
+      <section id="product" className="scroll-mt-20 border-b border-border/40">
         <div
           className={`${container} grid items-center gap-14 py-20 md:py-28 lg:grid-cols-2`}
         >
@@ -499,7 +562,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Feature grid ────────────────────────────────────── */}
-      <section id="features" className="border-b border-border/40 bg-muted/20">
+      <section id="features" className="scroll-mt-20 border-b border-border/40 bg-muted/20">
         <div className={`${container} py-20 md:py-28`}>
           <FadeUp className="mx-auto max-w-xl text-center">
             <SectionLabel>Features</SectionLabel>
@@ -570,7 +633,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Demo ─────────────────────────────────────────────── */}
-      <section id="demo" className="border-b border-border/40">
+      <section id="demo" className="scroll-mt-20 border-b border-border/40">
         <div className={`${container} py-20 md:py-28`}>
           <FadeUp className="max-w-xl">
             <SectionLabel>Interactive demo</SectionLabel>
@@ -789,7 +852,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Pricing ──────────────────────────────────────────── */}
-      <section id="pricing" className="border-b border-border/40">
+      <section id="pricing" className="scroll-mt-20 border-b border-border/40">
         <div className={`${container} py-20 md:py-28`}>
           <FadeUp className="mx-auto max-w-xl text-center">
             <SectionLabel>Pricing</SectionLabel>
@@ -901,7 +964,10 @@ export default function LandingPage() {
 
       {/* ── Final CTA ────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(59,130,246,0.05),transparent_60%)]" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(59,130,246,0.05),transparent_60%)]"
+        />
         <div className={`${container} relative py-24 text-center`}>
           <FadeUp>
             <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tighter md:text-[2.6rem] md:leading-[1.1]">
@@ -912,23 +978,19 @@ export default function LandingPage() {
               free trial. No credit card, no setup ceremony.
             </p>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href="/register"
-                className="inline-flex h-11 items-center gap-2 rounded-lg bg-foreground px-7 text-[13px] font-medium text-background transition-opacity hover:opacity-90"
-              >
+              <Link href="/register" className={ctaPrimary}>
                 Start free
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                href="/login"
-                className="inline-flex h-11 items-center gap-2 rounded-lg border border-border px-5 text-[13px] font-medium transition-colors hover:bg-muted"
-              >
+              <Link href="/login" className={ctaSecondary}>
                 Sign in
               </Link>
             </div>
           </FadeUp>
         </div>
       </section>
+
+      </main>
 
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer className="border-t border-border/40 bg-muted/20">
@@ -1015,10 +1077,14 @@ export default function LandingPage() {
             <div className="flex gap-2">
               <input
                 type="email"
+                aria-label="Email address"
                 placeholder="your@email.com"
-                className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-[13px] outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+                className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-[13px] outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
               />
-              <button className="inline-flex h-9 items-center rounded-lg bg-foreground px-4 text-[12px] font-medium text-background transition-opacity hover:opacity-90">
+              <button
+                type="button"
+                className="inline-flex h-9 items-center rounded-lg bg-foreground px-4 text-[12px] font-medium text-background transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
                 Subscribe
               </button>
             </div>

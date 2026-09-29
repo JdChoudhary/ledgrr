@@ -11,6 +11,8 @@ import {
   ContactIcon,
   Loader2Icon,
   PencilIcon,
+  PieChartIcon,
+  PlusIcon,
   RepeatIcon,
   UsersIcon,
   XIcon,
@@ -75,6 +77,12 @@ type Participant = {
   shareValue: string;
 };
 
+type CategorySplitRow = {
+  key: string;
+  categoryId: string | null;
+  amount: string;
+};
+
 const TYPE_CARDS: {
   value: TxMode;
   label: string;
@@ -128,6 +136,9 @@ const FREQUENCY_NOUN: Record<Frequency, { one: string; many: string }> = {
   yearly: { one: "year", many: "years" },
 };
 
+let categorySplitKeySeed = 0;
+const nextCategorySplitKey = () => `cs-${++categorySplitKeySeed}`;
+
 type Props = {
   currency: string;
   open: boolean;
@@ -167,6 +178,10 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
   const [method, setMethod] = React.useState<SplitMethod>("equal");
   const [friendQuery, setFriendQuery] = React.useState("");
   const [debouncedQuery, setDebouncedQuery] = React.useState("");
+
+  // --- category split state (allocate one amount across several categories) -----
+  const [catSplitEnabled, setCatSplitEnabled] = React.useState(false);
+  const [catSplitRows, setCatSplitRows] = React.useState<CategorySplitRow[]>([]);
 
   const [errors, setErrors] = React.useState<Record<string, string | undefined>>({});
 
@@ -250,6 +265,8 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
         setMethod("equal");
         setFriendQuery("");
         setDebouncedQuery("");
+        setCatSplitEnabled(false);
+        setCatSplitRows([]);
         setErrors({});
       }, 200);
       return () => clearTimeout(timer);
@@ -295,6 +312,16 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
   const shareSum = shares.reduce((acc, s) => acc + Number(s.amount), 0);
   const sharesReconcile = shares.length > 0 && Math.abs(shareSum - parsedAmount) < 0.0001;
 
+  // --- category split derived values ---------------------------------------------------
+  const catSplitTotal = catSplitRows.reduce((acc, row) => acc + (Number(row.amount) || 0), 0);
+  const catSplitRemaining = parsedAmount - catSplitTotal;
+  const catSplitReconciles =
+    catSplitRows.length >= 2 && parsedAmount > 0 && Math.abs(catSplitRemaining) < 0.0001;
+
+  // Which allocation layers are active — drives validation, submit and labels.
+  const billSplitActive = mode === "expense" && splitEnabled && participants.length >= 2;
+  const catSplitActive = mode !== "transfer" && catSplitEnabled && catSplitRows.length >= 2;
+
   const participantName = (p: Participant) => {
     if (p.userId != null && p.userId === selfUserId) return "You";
     return p.name ?? p.userId ?? "Participant";
@@ -306,6 +333,8 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
     setErrors({});
     setSplitEnabled(false);
     setParticipants([]);
+    setCatSplitEnabled(false);
+    setCatSplitRows([]);
     // Repeat settings don't carry across type switches (and transfer has no
     // repeat section at all — a stale flag would silently create a rule).
     setRepeatEnabled(false);
@@ -335,6 +364,9 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
     const next = !splitEnabled;
     setSplitEnabled(next);
     if (next) {
+      // A bill split cannot coexist with a category split.
+      setCatSplitEnabled(false);
+      setCatSplitRows([]);
       addSelf();
       // A recurring split MUST auto-post — reminders can't create the
       // participants' debts.
@@ -370,6 +402,35 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
 
   const removeParticipant = (key: string) =>
     setParticipants((prev) => prev.filter((p) => p.key !== key));
+
+  // --- category split helpers ------------------------------------------------------------
+  const updateCatSplitRow = (key: string, patch: Partial<CategorySplitRow>) =>
+    setCatSplitRows((prev) =>
+      prev.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    );
+
+  const removeCatSplitRow = (key: string) =>
+    setCatSplitRows((prev) => prev.filter((row) => row.key !== key));
+
+  const toggleCatSplit = () => {
+    const next = !catSplitEnabled;
+    setCatSplitEnabled(next);
+    if (next) {
+      // The split lines replace the single category, and a category split
+      // cannot coexist with a bill split (that would be a 2-D allocation).
+      setCategoryId(null);
+      setSplitEnabled(false);
+      setParticipants([]);
+      setCatSplitRows((prev) =>
+        prev.length >= 2
+          ? prev
+          : [
+              { key: nextCategorySplitKey(), categoryId: null, amount: "" },
+              { key: nextCategorySplitKey(), categoryId: null, amount: "" },
+            ],
+      );
+    }
+  };
 
   // --- validation + submit -----------------------------------------------------------------
   const validate = (): boolean => {
@@ -417,6 +478,25 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
         next.split = preview.error.message;
       }
     }
+    if (catSplitEnabled) {
+      if (mode === "transfer") {
+        next.catSplit = "Category splits aren't available on transfers";
+      } else if (catSplitRows.length < 2) {
+        next.catSplit = "Add at least two categories";
+      } else if (catSplitRows.some((row) => row.categoryId == null)) {
+        next.catSplit = "Pick a category for every line";
+      } else {
+        const ids = catSplitRows.map((row) => row.categoryId);
+        if (new Set(ids).size !== ids.length) {
+          next.catSplit = "Each category can only appear once";
+        } else if (Math.abs(catSplitTotal - parsedAmount) > 0.0001) {
+          next.catSplit = `Lines must add up to the amount — ${catSplitTotal.toFixed(2)} of ${parsedAmount.toFixed(2)}`;
+        }
+      }
+      if (next.catSplit == null && repeatEnabled) {
+        next.catSplit = "Category splits can't repeat yet — add them one at a time";
+      }
+    }
     setErrors(next);
     return Object.values(next).every((v) => v == null);
   };
@@ -426,7 +506,13 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
     if (mode == null) return;
     if (!validate()) return;
 
-    const isSplit = mode === "expense" && splitEnabled && participants.length >= 2;
+    const isSplit = billSplitActive;
+    const categorySplitPayload = catSplitActive
+      ? catSplitRows.map((row) => ({
+          categoryId: row.categoryId as string,
+          amount: Number(row.amount),
+        }))
+      : null;
     const billSplit = isSplit
       ? {
           title: description.trim() === "" ? "Split expense" : description.trim(),
@@ -449,9 +535,10 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
         accountId: accountId === "" ? null : accountId,
         destinationAccountId:
           mode === "transfer" && destinationAccountId !== "" ? destinationAccountId : null,
-        categoryId,
+        categoryId: catSplitActive ? null : categoryId,
         description: description.trim() === "" ? null : description.trim(),
-        billSplit,
+        billSplit: catSplitActive ? null : billSplit,
+        categorySplits: categorySplitPayload,
       });
     } catch {
       return; // Error already toasted by the hook.
@@ -1250,6 +1337,123 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
   );
 
   // =========================================================================================
+  // Render: category split section — one amount, several categories
+  // =========================================================================================
+  const categorySplitSection =
+    mode !== "transfer" ? (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={toggleCatSplit}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-all",
+            catSplitEnabled
+              ? "border-primary/40 bg-primary/5 text-primary"
+              : "border-border/50 text-muted-foreground hover:bg-muted/50",
+          )}
+        >
+          <PieChartIcon className="size-4 shrink-0" />
+          <span className="font-medium">Split across categories</span>
+          {catSplitEnabled && catSplitRows.length > 0 ? (
+            <Badge variant="secondary" className="text-[10px]">
+              {catSplitRows.length}
+            </Badge>
+          ) : null}
+          <div
+            className={cn(
+              "ml-auto h-5 w-9 rounded-full p-0.5 transition-colors",
+              catSplitEnabled ? "bg-primary" : "bg-muted",
+            )}
+          >
+            <div
+              className={cn(
+                "size-4 rounded-full bg-white shadow transition-transform",
+                catSplitEnabled && "translate-x-4",
+              )}
+            />
+          </div>
+        </button>
+
+        {catSplitEnabled ? (
+          <div className="animate-in slide-in-from-top-1 space-y-3 pl-1">
+            <p className="text-xs text-muted-foreground">
+              Divide this amount across what it actually covered. Each category&apos;s budget only
+              counts its own line.
+            </p>
+
+            <div className="space-y-2">
+              {catSplitRows.map((row) => (
+                <div key={row.key} className="flex items-start gap-2">
+                  <CategoryCombobox
+                    value={row.categoryId}
+                    onValueChange={(value) => updateCatSplitRow(row.key, { categoryId: value })}
+                    type={mode === "income" ? "income" : "expense"}
+                    placeholder="Category"
+                    className="min-w-0 flex-1"
+                  />
+                  <div className="w-24 shrink-0 space-y-1">
+                    <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {currency}
+                    </span>
+                    <Input
+                      className="h-9 text-right text-sm tabular-nums"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={row.amount}
+                      onChange={(e) => updateCatSplitRow(row.key, { amount: e.target.value })}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="mt-5 shrink-0"
+                    disabled={catSplitRows.length <= 2}
+                    onClick={() => removeCatSplitRow(row.key)}
+                    aria-label="Remove category line"
+                  >
+                    <XIcon className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() =>
+                setCatSplitRows((prev) => [
+                  ...prev,
+                  { key: nextCategorySplitKey(), categoryId: null, amount: "" },
+                ])
+              }
+            >
+              <PlusIcon className="size-3.5" />
+              Add another category
+            </Button>
+
+            <div
+              className={cn(
+                "rounded-lg p-2 text-xs",
+                catSplitReconciles
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-amber-500/10 text-amber-600",
+              )}
+            >
+              {catSplitReconciles
+                ? `✓ Splits to ${catSplitTotal.toFixed(2)} of ${parsedAmount.toFixed(2)}`
+                : `Allocated ${catSplitTotal.toFixed(2)} of ${parsedAmount.toFixed(2)} — ${Math.abs(catSplitRemaining).toFixed(2)} ${catSplitRemaining > 0 ? "left" : "over"}`}
+            </div>
+
+            <FieldError>{errors.catSplit}</FieldError>
+          </div>
+        ) : null}
+      </div>
+    ) : null;
+
+  // =========================================================================================
   // Render: notes (collapsed by default)
   // =========================================================================================
   const notesSection = !showNotes ? (
@@ -1283,14 +1487,15 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
         dateSection
       ) : (
         <div className="flex items-end gap-3">
-          {categoryPickerSection}
+          {catSplitEnabled ? null : categoryPickerSection}
           {compactDateSection}
         </div>
       )}
       {accountSection}
 
-      {/* Inline optional sections — expense only, same toggle style */}
+      {/* Inline optional sections — same toggle style */}
       {mode === "expense" ? splitSection : null}
+      {categorySplitSection}
       {mode !== "transfer" ? repeatSection : null}
 
       {notesSection}
@@ -1351,11 +1556,15 @@ export function TransactionFormDialog({ currency, open, onOpenChange }: Props) {
                         : "Transfer"
                   } & repeat`
                 : mode === "expense"
-                  ? splitEnabled && participants.length >= 2
-                    ? "Add expense & split"
-                    : "Add expense"
+                  ? catSplitActive
+                    ? "Add expense & split categories"
+                    : billSplitActive
+                      ? "Add expense & split"
+                      : "Add expense"
                   : mode === "income"
-                    ? "Add income"
+                    ? catSplitActive
+                      ? "Add income & split categories"
+                      : "Add income"
                     : "Transfer"}
             </Button>
           </DialogFooter>

@@ -13,6 +13,7 @@ import { currencyRouter } from "./routes/currency/route";
 import { transactionRouter } from "./routes/transaction/route";
 import { debtRouter } from "./routes/debt/route";
 import { contactsRouter } from "./routes/contacts/route";
+import { householdRouter } from "./routes/household/route";
 import { recurringRouter } from "./routes/recurring/route";
 import { profileRouter } from "./routes/profile/route";
 import { analyticsRouter } from "./routes/analytics/route";
@@ -29,6 +30,7 @@ export const serverRouter = router({
   tag: tagRouter,
   friend: friendshipRouter,
   contacts: contactsRouter,
+  household: householdRouter,
   currency: currencyRouter,
   transaction: transactionRouter,
   debt: debtRouter,

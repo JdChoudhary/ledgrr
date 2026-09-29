@@ -10,6 +10,7 @@ import {
   Loader2Icon,
   MoreVerticalIcon,
   PauseIcon,
+  PieChartIcon,
   PlayIcon,
   PlusIcon,
   ReceiptTextIcon,
@@ -471,6 +472,11 @@ export function TransactionsView() {
                     <TableCell>
                       {row.type === "transfer" ? (
                         <span className="text-xs text-muted-foreground">—</span>
+                      ) : row.splits.length > 0 ? (
+                        <Badge variant="outline" className="gap-1.5 font-normal">
+                          <PieChartIcon className="size-3" />
+                          {row.splits.length} categories
+                        </Badge>
                       ) : row.categoryName ? (
                         <Badge
                           variant="outline"

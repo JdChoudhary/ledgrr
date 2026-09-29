@@ -7,6 +7,7 @@ import {
   SlidersHorizontalIcon,
   TagsIcon,
   UserRoundIcon,
+  UsersIcon,
 } from "lucide-react";
 
 import {
@@ -24,6 +25,7 @@ import { ProfileTab } from "./profile-tab";
 import { SecurityTab } from "./security-tab";
 import { PreferencesTab } from "./preferences-tab";
 import { CategoriesTab } from "./categories-tab";
+import { HouseholdTab } from "./household-tab";
 
 /**
  * Settings — profile header on top (avatar, name, @username, verified badge,
@@ -33,6 +35,7 @@ import { CategoriesTab } from "./categories-tab";
  *   Security     — change password (current password required)
  *   Preferences  — display currency, theme, week start
  *   Categories   — reorder / rename category groups and categories
+ *   Household    — shared categories and budgets with family/housemates
  */
 export function SettingsView() {
   const profile = useProfile(undefined);
@@ -62,6 +65,10 @@ export function SettingsView() {
             <TagsIcon data-icon="inline-start" />
             Categories
           </TabsTrigger>
+          <TabsTrigger value="household">
+            <UsersIcon data-icon="inline-start" />
+            Household
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
@@ -78,6 +85,10 @@ export function SettingsView() {
 
         <TabsContent value="categories" className="mt-4">
           <CategoriesTab />
+        </TabsContent>
+
+        <TabsContent value="household" className="mt-4">
+          <HouseholdTab />
         </TabsContent>
       </Tabs>
 

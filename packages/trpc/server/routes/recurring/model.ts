@@ -85,7 +85,10 @@ export const ruleLogLookupSchema = z.object({
 
 export const ruleResponseSchema = z.object({
   id: z.string().uuid(),
-  userId: z.string().uuid(),
+  // `user.id` is text (Better Auth owns identity) — never a UUID. Validating it
+  // as one made output validation throw for every rule, so `recurring.list`
+  // returned nothing and `recurring.create` failed after inserting the row.
+  userId: z.string(),
   createdBy: z.string(),
   accountId: z.string().nullable(),
   destinationAccountId: z.string().nullable(),
