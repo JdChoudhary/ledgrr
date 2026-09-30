@@ -3,7 +3,6 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { username, admin } from "better-auth/plugins";
 import db from "@repo/database";
 import * as schema from "@repo/database/schema";
-import { createPersonalSpace } from "@repo/services/space";
 import { ensureBaseCurrency } from "@repo/services/currency";
 import { linkContactsForNewUser } from "@repo/services/contacts";
 
@@ -31,12 +30,9 @@ export const auth = betterAuth({
         after: async (user) => {
           console.log(`User ${user.email} has been created`);
           try {
-            // Bootstrap reference data first: USD must exist before any space
-            // can reference it. Idempotent, so this is safe on every signup.
+            // Bootstrap reference data first: USD must exist before any
+            // transaction can reference it. Idempotent, so this is safe on every signup.
             await ensureBaseCurrency();
-
-            // Every user starts with exactly one personal space, based in USD.
-            await createPersonalSpace({ userId: user.id });
 
             // §15 — friends who joined: if existing users added this person
             // as a contact (by email/phone) before they signed up, link those

@@ -13,9 +13,8 @@ export const currencyNameSchema = z.string().trim().min(1).max(100);
 export const currencySymbolSchema = z.string().trim().min(1).max(10);
 
 /**
- * Bootstrapped on every signup (and before the personal space is created) so
- * the default base currency always exists and `createPersonalSpace` never
- * fails on a missing `currencies` row. Idempotent.
+ * Bootstrapped on every signup so the default base currency always exists
+ * before any transaction can reference it. Idempotent.
  */
 export const DEFAULT_BASE_CURRENCY = {
   code: "USD",

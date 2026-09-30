@@ -38,7 +38,6 @@ interface MarkAsRecurringDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transaction: Transaction | null;
-  spaceId: string;
   accounts: Array<{ id: string; name: string }>;
   categories: Array<{ id: string; name: string }>;
 }
@@ -47,7 +46,6 @@ export function MarkAsRecurringDialog({
   open,
   onOpenChange,
   transaction,
-  spaceId,
   accounts,
   categories,
 }: MarkAsRecurringDialogProps) {
@@ -81,7 +79,6 @@ export function MarkAsRecurringDialog({
     const parsedInterval = Math.max(1, Math.floor(Number(interval) || 1));
 
     createRule.createRuleAsync({
-      spaceId,
       type,
       amount: Number(transaction.amount),
       description: transaction.description || transaction.merchant || "Recurring",

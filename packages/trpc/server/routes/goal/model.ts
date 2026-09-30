@@ -6,7 +6,6 @@ import { uuidSchema } from "@repo/services/lib/schema";
 // -------------------------------------------------------------------
 
 export const createGoalSchema = z.object({
-  spaceId: uuidSchema,
   name: z.string().trim().min(1).max(120),
   targetAmount: z.union([z.number().positive(), z.string().trim().min(1)]),
   currency: z.string().trim().min(3).max(10).optional(),
@@ -20,7 +19,6 @@ export const createGoalSchema = z.object({
 
 export const updateGoalSchema = z
   .object({
-    spaceId: uuidSchema,
     goalId: uuidSchema,
     name: z.string().trim().min(1).max(120).optional(),
     targetAmount: z.union([z.number().positive(), z.string().trim().min(1)]).optional(),
@@ -41,12 +39,10 @@ export const updateGoalSchema = z
   );
 
 export const goalLookupSchema = z.object({
-  spaceId: uuidSchema,
   goalId: uuidSchema,
 });
 
 export const listGoalsSchema = z.object({
-  spaceId: uuidSchema,
   includeArchived: z.boolean().optional().default(false),
 });
 
@@ -55,7 +51,6 @@ export const listGoalsSchema = z.object({
 // -------------------------------------------------------------------
 
 export const contributeToGoalSchema = z.object({
-  spaceId: uuidSchema,
   goalId: uuidSchema,
   type: z.enum(["deposit", "withdrawal"]),
   amount: z.union([z.number().positive(), z.string().trim().min(1)]),
@@ -64,7 +59,6 @@ export const contributeToGoalSchema = z.object({
 });
 
 export const listGoalContributionsSchema = z.object({
-  spaceId: uuidSchema,
   goalId: uuidSchema,
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
@@ -84,7 +78,6 @@ export const contributionResultResponseSchema = z.object({
 export const goalContributionResponseSchema = z.object({
   id: z.string(),
   goalId: z.string(),
-  spaceId: z.string(),
   userId: z.string(),
   accountId: z.string().nullable(),
   type: z.enum(["deposit", "withdrawal"]),

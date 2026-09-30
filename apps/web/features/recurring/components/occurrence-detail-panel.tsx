@@ -172,7 +172,6 @@ export function OccurrenceDetailPanel({
                         return;
                       }
                       confirmMutation.confirmOccurrence({
-                        spaceId: "",
                         occurrenceId: occurrence.id,
                         amount: val,
                       });
@@ -188,7 +187,6 @@ export function OccurrenceDetailPanel({
                     disabled={skipMutation.isPending}
                     onClick={() => {
                       skipMutation.skipOccurrence({
-                        spaceId: "",
                         occurrenceId: occurrence.id,
                         reason: "Skipped by user",
                       });

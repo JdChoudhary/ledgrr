@@ -30,7 +30,7 @@ const getPath = generatePath("/categories");
 
 const categoryResponseSchema = z.object({
   id: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   createdBy: z.string(),
   groupId: z.string().nullable(),
   mergedIntoId: z.string().nullable(),

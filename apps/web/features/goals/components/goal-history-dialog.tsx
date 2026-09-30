@@ -37,7 +37,7 @@ export function GoalHistoryDialog({
   onOpenChange,
 }: GoalHistoryDialogProps) {
   const contributions = useGoalContributions(
-    goal ? { spaceId: goal.spaceId, goalId: goal.id } : undefined,
+    goal ? { goalId: goal.id } : undefined,
   );
 
   return (

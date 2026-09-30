@@ -1,16 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  foreignKey,
-  index,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
-import { spaceMembers } from "./space-members";
-import { spaces } from "./spaces";
+import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 
 // Product/usage analytics, separate from accounting. Never use this table to
@@ -26,7 +15,6 @@ export const analyticsEvents = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
-    spaceId: uuid("space_id").references(() => spaces.id),
 
     sessionId: uuid("session_id"),
 
@@ -46,12 +34,7 @@ export const analyticsEvents = pgTable(
     uniqueIndex("analytics_events_idempotency_key_unique")
       .on(table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),
-    index("analytics_events_space_occurred_at_idx").on(table.spaceId, table.occurredAt),
-    foreignKey({
-      name: "analytics_events_space_member_fkey",
-      columns: [table.spaceId, table.userId],
-      foreignColumns: [spaceMembers.spaceId, spaceMembers.userId],
-    }),
+    index("analytics_events_user_occurred_at_idx").on(table.userId, table.occurredAt),
   ],
 );
 

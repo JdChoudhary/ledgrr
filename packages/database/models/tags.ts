@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 export const tags = pgTable(
@@ -8,9 +7,9 @@ export const tags = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
@@ -23,9 +22,9 @@ export const tags = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("tags_space_name_unique").on(table.spaceId, sql`lower(${table.name})`),
-    // Enables the composite space FK from transaction_tags.
-    unique("tags_id_space_id_unique").on(table.id, table.spaceId),
+    uniqueIndex("tags_user_name_unique").on(table.userId, sql`lower(${table.name})`),
+    // Enables the composite user FK from transaction_tags.
+    unique("tags_id_user_id_unique").on(table.id, table.userId),
   ],
 );
 

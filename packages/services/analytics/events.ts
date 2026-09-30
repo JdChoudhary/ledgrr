@@ -1,4 +1,4 @@
-import { and, db, desc, eq } from "@repo/database";
+import { db, desc, eq } from "@repo/database";
 import { analyticsEvents } from "@repo/database/schema";
 import { parseInput } from "../lib/schema";
 import {
@@ -7,15 +7,13 @@ import {
 } from "./model";
 
 /**
- * Read back recent product events (admin/debug views). Space-scoped when a
- * spaceId is provided, otherwise the actor's personal (space-less) events.
+ * Read back recent product events (admin/debug views), scoped to the actor.
  */
 export async function listEvents(input: {
   actorUserId: string;
-  spaceId?: string | null;
   limit?: number;
 }): Promise<AnalyticsEventItem[]> {
-  const { actorUserId, spaceId, limit } = parseInput(
+  const { actorUserId, limit } = parseInput(
     listEventsServiceSchema,
     input,
     "listEvents input",
@@ -24,19 +22,13 @@ export async function listEvents(input: {
   const rows = await db
     .select()
     .from(analyticsEvents)
-    .where(
-      and(
-        eq(analyticsEvents.userId, actorUserId),
-        ...(spaceId != null ? [eq(analyticsEvents.spaceId, spaceId)] : []),
-      ),
-    )
+    .where(eq(analyticsEvents.userId, actorUserId))
     .orderBy(desc(analyticsEvents.occurredAt))
     .limit(limit);
 
   return rows.map((row) => ({
     id: row.id,
     userId: row.userId,
-    spaceId: row.spaceId,
     eventName: row.eventName,
     eventCategory: row.eventCategory,
     entityType: row.entityType,

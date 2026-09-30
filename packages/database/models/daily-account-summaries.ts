@@ -11,19 +11,19 @@ import {
 } from "drizzle-orm/pg-core";
 import { currencies } from "./currencies";
 import { financialAccounts } from "./financial-accounts";
-import { spaces } from "./spaces";
+import { user } from "./auth-schema";
 
 // Derived, rebuildable analytics. Transactions remain authoritative and only
-// posted, non-deleted rows are counted. All values are in the space base
+// posted, non-deleted rows are counted. All values are in the user's base
 // currency; calculation_version identifies the calculation logic.
 export const dailyAccountSummaries = pgTable(
   "daily_account_summary",
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     accountId: uuid("account_id").notNull(),
 
     date: date("date").notNull(),
@@ -53,15 +53,15 @@ export const dailyAccountSummaries = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex("daily_account_summary_space_account_date_unique").on(
-      table.spaceId,
+    uniqueIndex("daily_account_summary_user_account_date_unique").on(
+      table.userId,
       table.accountId,
       table.date,
     ),
     foreignKey({
       name: "daily_account_summary_account_fkey",
-      columns: [table.accountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.accountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
   ],
 );

@@ -6,9 +6,10 @@ import {
   debts,
   financialAccounts,
   merchants,
-  spaces,
+  transactionSplits,
   transactions,
   type SelectTransaction,
+  userSettings,
 } from "@repo/database/schema";
 import {
   ServiceError,
@@ -16,7 +17,7 @@ import {
   isForeignKeyViolation,
 } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember, assertCurrencyExists } from "../space";
+import { assertCurrencyExists } from "../currency";
 import { recordEvent } from "../analytics";
 import {
   createTransactionInputSchema,
@@ -31,6 +32,7 @@ import {
   type SplitShare,
   type TransactionLookupInput,
 } from "./model";
+import type { CategorySplitInput } from "./model";
 import { allocateShares } from "./shares";
 
 /**
@@ -60,7 +62,7 @@ const fmtMoney = (value: string | number): string => Number(value).toFixed(4);
 
 const listColumns = {
   id: transactions.id,
-  spaceId: transactions.spaceId,
+  userId: transactions.userId,
   createdBy: transactions.createdBy,
   accountId: transactions.accountId,
   destinationAccountId: transactions.destinationAccountId,
@@ -84,10 +86,20 @@ const listColumns = {
   updatedAt: transactions.updatedAt,
 };
 
+/** One per-category allocation line of a split transaction. */
+export type TransactionSplitItem = {
+  categoryId: string;
+  /** Share of the transaction amount in the transaction currency (4 dp). */
+  amount: string;
+  note: string | null;
+  categoryName: string | null;
+  categoryColor: string | null;
+};
+
 /** Subset of the transaction row that the API layer exposes. */
 export type TransactionListItem = {
   id: string;
-  spaceId: string;
+  userId: string;
   createdBy: string;
   accountId: string | null;
   destinationAccountId: string | null;
@@ -110,6 +122,8 @@ export type TransactionListItem = {
   categoryName: string | null;
   categoryColor: string | null;
   accountName: string | null;
+  /** Per-category allocation; empty when the amount is not split. */
+  splits: TransactionSplitItem[];
   postedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -118,9 +132,10 @@ export type TransactionListItem = {
 const toListItem = (
   row: SelectTransaction,
   refs: { categoryName?: string | null; categoryColor?: string | null; accountName?: string | null } = {},
+  splits: TransactionSplitItem[] = [],
 ): TransactionListItem => ({
   id: row.id,
-  spaceId: row.spaceId,
+  userId: row.userId,
   createdBy: row.createdBy,
   accountId: row.accountId,
   destinationAccountId: row.destinationAccountId,
@@ -142,6 +157,7 @@ const toListItem = (
   categoryName: refs.categoryName ?? null,
   categoryColor: refs.categoryColor ?? null,
   accountName: refs.accountName ?? null,
+  splits,
   postedAt: row.postedAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -156,7 +172,6 @@ export async function createTransaction(
 ): Promise<TransactionListItem> {
   const parsed = parseInput(createTransactionInputSchema, input, "createTransaction input");
   const {
-    spaceId,
     actorUserId,
     type,
     amount,
@@ -170,24 +185,22 @@ export async function createTransaction(
     notes,
     refundParentId,
     billSplit,
+    categorySplits,
     recurringRuleId,
   } = parsed;
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const [space] = await db
-    .select({ baseCurrency: spaces.baseCurrency })
-    .from(spaces)
-    .where(eq(spaces.id, spaceId))
+  const [settings] = await db
+    .select({ displayCurrency: userSettings.displayCurrency })
+    .from(userSettings)
+    .where(eq(userSettings.userId, actorUserId))
     .limit(1);
-  if (!space) {
-    throw new ServiceError("NOT_FOUND", "Space not found");
-  }
+  const baseCurrency = settings?.displayCurrency ?? "USD";
 
-  const effectiveCurrency = currency ?? space.baseCurrency;
+  const effectiveCurrency = currency ?? baseCurrency;
   await assertCurrencyExists(effectiveCurrency);
 
-  // --- optional references must belong to this space -------------------
+  // --- optional references must belong to this user ---------------------
   if (accountId != null) {
     const [account] = await db
       .select({ id: financialAccounts.id })
@@ -195,12 +208,12 @@ export async function createTransaction(
       .where(
         and(
           eq(financialAccounts.id, accountId),
-          eq(financialAccounts.spaceId, spaceId),
+          eq(financialAccounts.userId, actorUserId),
         ),
       )
       .limit(1);
     if (!account) {
-      throw new ServiceError("VALIDATION_ERROR", "Account not found in this space");
+      throw new ServiceError("VALIDATION_ERROR", "Account not found for this user");
     }
   }
 
@@ -211,12 +224,12 @@ export async function createTransaction(
       .where(
         and(
           eq(financialAccounts.id, destinationAccountId),
-          eq(financialAccounts.spaceId, spaceId),
+          eq(financialAccounts.userId, actorUserId),
         ),
       )
       .limit(1);
     if (!destination) {
-      throw new ServiceError("VALIDATION_ERROR", "Destination account not found in this space");
+      throw new ServiceError("VALIDATION_ERROR", "Destination account not found for this user");
     }
   }
 
@@ -224,10 +237,10 @@ export async function createTransaction(
     const [category] = await db
       .select({ id: categories.id })
       .from(categories)
-      .where(and(eq(categories.id, categoryId), eq(categories.spaceId, spaceId)))
+      .where(and(eq(categories.id, categoryId), eq(categories.userId, actorUserId)))
       .limit(1);
     if (!category) {
-      throw new ServiceError("VALIDATION_ERROR", "Category not found in this space");
+      throw new ServiceError("VALIDATION_ERROR", "Category not found for this user");
     }
   }
 
@@ -235,10 +248,10 @@ export async function createTransaction(
     const [merchant] = await db
       .select({ id: merchants.id })
       .from(merchants)
-      .where(and(eq(merchants.id, merchantId), eq(merchants.spaceId, spaceId)))
+      .where(and(eq(merchants.id, merchantId), eq(merchants.userId, actorUserId)))
       .limit(1);
     if (!merchant) {
-      throw new ServiceError("VALIDATION_ERROR", "Merchant not found in this space");
+      throw new ServiceError("VALIDATION_ERROR", "Merchant not found for this user");
     }
   }
 
@@ -252,18 +265,70 @@ export async function createTransaction(
       .where(
         and(
           eq(transactions.id, refundParentId),
-          eq(transactions.spaceId, spaceId),
+          eq(transactions.userId, actorUserId),
         ),
       )
       .limit(1);
     if (!parent) {
-      throw new ServiceError("VALIDATION_ERROR", "Refund parent transaction not found in this space");
+      throw new ServiceError("VALIDATION_ERROR", "Refund parent transaction not found for this user");
     }
     if (parent.type !== "expense" && parent.type !== "income") {
       throw new ServiceError("VALIDATION_ERROR", "Refunds can only reference an income or expense transaction");
     }
   } else if (type === "refund") {
     throw new ServiceError("VALIDATION_ERROR", "A refund must reference the original transaction");
+  }
+
+  // --- optional per-category allocation --------------------------------
+  // Splits replace the single categoryId (the lines ARE the allocation) and
+  // are mutually exclusive with bill splits: a bill split divides WHO pays,
+  // a category split divides WHAT it was for — combining both would require
+  // a two-dimensional allocation matrix.
+  let normalizedSplits: CategorySplitInput[] | null = null;
+  if (categorySplits != null) {
+    if (type === "transfer") {
+      throw new ServiceError("VALIDATION_ERROR", "Category splits are not supported on transfers");
+    }
+    if (categoryId != null) {
+      throw new ServiceError(
+        "VALIDATION_ERROR",
+        "Provide either categoryId or categorySplits, not both",
+      );
+    }
+    if (billSplit != null) {
+      throw new ServiceError(
+        "VALIDATION_ERROR",
+        "A transaction cannot have both a category split and a bill split",
+      );
+    }
+
+    const categoryIds = categorySplits.map((s) => s.categoryId);
+    if (new Set(categoryIds).size !== categoryIds.length) {
+      throw new ServiceError("VALIDATION_ERROR", "Category splits contain duplicate categories");
+    }
+
+    const splitSum = categorySplits.reduce((acc, s) => acc + Number(s.amount), 0);
+    if (Math.abs(splitSum - Number(amount)) > 0.0001) {
+      throw new ServiceError(
+        "VALIDATION_ERROR",
+        `Category splits must sum to the transaction amount (got ${splitSum.toFixed(2)} of ${Number(amount).toFixed(2)})`,
+      );
+    }
+
+    const owned = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.userId, actorUserId),
+          inArray(categories.id, categoryIds),
+        ),
+      );
+    if (owned.length !== new Set(categoryIds).size) {
+      throw new ServiceError("VALIDATION_ERROR", "One or more split categories not found for this user");
+    }
+
+    normalizedSplits = categorySplits;
   }
 
   // Transfers need both accounts (only type with a hard account requirement).
@@ -345,7 +410,7 @@ export async function createTransaction(
           .from(financialAccounts)
           .where(
             and(
-              eq(financialAccounts.spaceId, spaceId),
+              eq(financialAccounts.userId, actorUserId),
               inArray(financialAccounts.id, accountIds),
             ),
           )
@@ -374,7 +439,6 @@ export async function createTransaction(
           .insert(billSplits)
           .values({
             createdBy: actorUserId,
-            spaceId,
             title: splitPlan.title,
             totalAmount: fmtMoney(amount),
             currency: effectiveCurrency,
@@ -407,7 +471,7 @@ export async function createTransaction(
       const [transaction] = await tx
         .insert(transactions)
         .values({
-          spaceId,
+          userId: actorUserId,
           createdBy: actorUserId,
           accountId: accountId ?? null,
           destinationAccountId: destinationAccountId ?? null,
@@ -419,7 +483,7 @@ export async function createTransaction(
           amount: fmtMoney(amount),
           personalAmount: fmtMoney(personalAmount),
           currency: effectiveCurrency,
-          baseCurrency: space.baseCurrency,
+          baseCurrency,
           exchangeRate: "1.0000000000",
           exchangeRateDate: effectiveDate,
           amountInBaseCurrency: fmtMoney(amount),
@@ -433,6 +497,19 @@ export async function createTransaction(
         .returning();
       if (!transaction) {
         throw new ServiceError("INVALID_STATE", "Failed to create transaction");
+      }
+
+      // 2b. Per-category allocation lines (optional).
+      if (normalizedSplits != null) {
+        await tx.insert(transactionSplits).values(
+          normalizedSplits.map((s) => ({
+            transactionId: transaction.id,
+            userId: actorUserId,
+            categoryId: s.categoryId,
+            amount: fmtMoney(s.amount),
+            note: s.note ?? null,
+          })),
+        );
       }
 
       // 3. One debt per OTHER participant (receivable owed to the creator).
@@ -473,7 +550,7 @@ export async function createTransaction(
           .where(
             and(
               eq(financialAccounts.id, accountId),
-              eq(financialAccounts.spaceId, spaceId),
+              eq(financialAccounts.userId, actorUserId),
             ),
           );
       }
@@ -487,7 +564,7 @@ export async function createTransaction(
           .where(
             and(
               eq(financialAccounts.id, destinationAccountId),
-              eq(financialAccounts.spaceId, spaceId),
+              eq(financialAccounts.userId, actorUserId),
             ),
           );
       }
@@ -495,7 +572,11 @@ export async function createTransaction(
       return transaction;
     });
 
-    return toListItem(created, await resolveTransactionRefs(spaceId, created));
+    return toListItem(
+      created,
+      await resolveTransactionRefs(actorUserId, created),
+      await loadSplits(created.id, created.userId),
+    );
   } catch (error) {
     if (isForeignKeyViolation(error)) {
       throw new ServiceError("VALIDATION_ERROR", "Invalid account, category, merchant or split reference");
@@ -524,7 +605,6 @@ export async function createTransactionWithEvent(
   );
   await recordEvent({
     actorUserId: parsed.actorUserId,
-    spaceId: parsed.spaceId,
     eventName: `transaction_${transaction.type}_created`,
     eventCategory: "transaction",
     entityType: "transaction",
@@ -569,7 +649,7 @@ function transactionDirection(type: SelectTransaction["type"]): 1 | -1 {
  * "No account" fallbacks.
  */
 async function resolveTransactionRefs(
-  spaceId: string,
+  actorUserId: string,
   row: Pick<SelectTransaction, "categoryId" | "accountId">,
 ): Promise<{ categoryName: string | null; categoryColor: string | null; accountName: string | null }> {
   const [categoryRow, accountRow] = await Promise.all([
@@ -580,7 +660,7 @@ async function resolveTransactionRefs(
           .where(
             and(
               eq(categories.id, row.categoryId),
-              eq(categories.spaceId, spaceId),
+              eq(categories.userId, actorUserId),
             ),
           )
           .limit(1)
@@ -592,7 +672,7 @@ async function resolveTransactionRefs(
           .where(
             and(
               eq(financialAccounts.id, row.accountId),
-              eq(financialAccounts.spaceId, spaceId),
+              eq(financialAccounts.userId, actorUserId),
             ),
           )
           .limit(1)
@@ -606,16 +686,55 @@ async function resolveTransactionRefs(
   };
 }
 
+/**
+ * Load a transaction's per-category allocation lines with resolved category
+ * display data. Empty when the transaction is not split.
+ */
+async function loadSplits(
+  transactionId: string,
+  ownerUserId: string,
+): Promise<TransactionSplitItem[]> {
+  const rows = await db
+    .select({
+      categoryId: transactionSplits.categoryId,
+      amount: transactionSplits.amount,
+      note: transactionSplits.note,
+      categoryName: categories.name,
+      categoryColor: categories.color,
+    })
+    .from(transactionSplits)
+    .leftJoin(
+      categories,
+      and(
+        eq(categories.id, transactionSplits.categoryId),
+        eq(categories.userId, transactionSplits.userId),
+      ),
+    )
+    .where(
+      and(
+        eq(transactionSplits.transactionId, transactionId),
+        eq(transactionSplits.userId, ownerUserId),
+      ),
+    );
+
+  return rows.map((r) => ({
+    categoryId: r.categoryId,
+    amount: r.amount,
+    note: r.note,
+    categoryName: r.categoryName ?? null,
+    categoryColor: r.categoryColor ?? null,
+  }));
+}
+
 export async function getTransaction(
   input: TransactionLookupInput,
 ): Promise<TransactionListItem> {
-  const { spaceId, actorUserId, transactionId } = parseInput(
+  const { actorUserId, transactionId } = parseInput(
     transactionLookupSchema,
     input,
     "getTransaction input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [transaction] = await db
     .select()
@@ -623,7 +742,7 @@ export async function getTransaction(
     .where(
       and(
         eq(transactions.id, transactionId),
-        eq(transactions.spaceId, spaceId),
+        eq(transactions.userId, actorUserId),
       ),
     )
     .limit(1);
@@ -631,14 +750,17 @@ export async function getTransaction(
   if (!transaction) {
     throw new ServiceError("NOT_FOUND", "Transaction not found");
   }
-  return toListItem(transaction, await resolveTransactionRefs(spaceId, transaction));
+  return toListItem(
+    transaction,
+    await resolveTransactionRefs(actorUserId, transaction),
+    await loadSplits(transactionId, actorUserId),
+  );
 }
 
 export async function listTransactions(
   input: ListTransactionsInput,
 ): Promise<ReadonlyArray<TransactionListItem>> {
   const {
-    spaceId,
     actorUserId,
     accountId,
     type,
@@ -650,9 +772,8 @@ export async function listTransactions(
     offset,
   } = parseInput(listTransactionsInputSchema, input, "listTransactions input");
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
-  const conditions = [eq(transactions.spaceId, spaceId)];
+  const conditions = [eq(transactions.userId, actorUserId)];
   if (accountId != null) conditions.push(eq(transactions.accountId, accountId));
   if (type != null) conditions.push(eq(transactions.type, type));
   if (status != null) conditions.push(eq(transactions.status, status));
@@ -674,9 +795,58 @@ export async function listTransactions(
     .limit(limit)
     .offset(offset);
 
+  // Batch-load split lines for the whole page in one query.
+  const splitMap = new Map<string, TransactionSplitItem[]>();
+  if (rows.length > 0) {
+    const splitRows = await db
+      .select({
+        transactionId: transactionSplits.transactionId,
+        categoryId: transactionSplits.categoryId,
+        amount: transactionSplits.amount,
+        note: transactionSplits.note,
+        categoryName: categories.name,
+        categoryColor: categories.color,
+      })
+      .from(transactionSplits)
+      .leftJoin(
+        categories,
+        and(
+          eq(categories.id, transactionSplits.categoryId),
+          eq(categories.userId, transactionSplits.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(
+            transactionSplits.userId,
+            actorUserId,
+          ),
+          inArray(
+            transactionSplits.transactionId,
+            rows.map((r) => r.id),
+          ),
+        ),
+      );
+    for (const s of splitRows) {
+      const list = splitMap.get(s.transactionId) ?? [];
+      list.push({
+        categoryId: s.categoryId,
+        amount: s.amount,
+        note: s.note,
+        categoryName: s.categoryName ?? null,
+        categoryColor: s.categoryColor ?? null,
+      });
+      splitMap.set(s.transactionId, list);
+    }
+  }
+
   return Promise.all(
     rows.map(async (row) =>
-      toListItem(row, await resolveTransactionRefs(spaceId, row)),
+      toListItem(
+        row,
+        await resolveTransactionRefs(actorUserId, row),
+        splitMap.get(row.id) ?? [],
+      ),
     ),
   );
 }
@@ -702,19 +872,18 @@ export async function listTransactions(
 export async function deleteTransaction(
   input: DeleteTransactionInput,
 ): Promise<{ id: string }> {
-  const { spaceId, actorUserId, transactionId } = parseInput(
+  const { actorUserId, transactionId } = parseInput(
     deleteTransactionInputSchema,
     input,
     "deleteTransaction input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [transaction] = await db
     .select()
     .from(transactions)
     .where(
-      and(eq(transactions.id, transactionId), eq(transactions.spaceId, spaceId)),
+      and(eq(transactions.id, transactionId), eq(transactions.userId, actorUserId)),
     )
     .limit(1);
   if (!transaction) {
@@ -756,7 +925,7 @@ export async function deleteTransaction(
         .from(financialAccounts)
         .where(
           and(
-            eq(financialAccounts.spaceId, spaceId),
+            eq(financialAccounts.userId, actorUserId),
             inArray(financialAccounts.id, accountIds),
           ),
         )
@@ -780,7 +949,7 @@ export async function deleteTransaction(
         .where(
           and(
             eq(financialAccounts.id, transaction.accountId),
-            eq(financialAccounts.spaceId, spaceId),
+            eq(financialAccounts.userId, actorUserId),
           ),
         );
     }
@@ -797,7 +966,7 @@ export async function deleteTransaction(
         .where(
           and(
             eq(financialAccounts.id, transaction.destinationAccountId),
-            eq(financialAccounts.spaceId, spaceId),
+            eq(financialAccounts.userId, actorUserId),
           ),
         );
     }

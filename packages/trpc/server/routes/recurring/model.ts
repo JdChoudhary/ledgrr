@@ -9,7 +9,6 @@ import { uuidSchema } from "@repo/services/lib/schema";
  */
 
 export const createRuleSchema = z.object({
-  spaceId: uuidSchema,
 
   type: z.enum(["income", "expense", "transfer"]),
   amount: z.union([z.number().positive(), z.string().trim().min(1)]),
@@ -67,7 +66,6 @@ export const createRuleSchema = z.object({
 export type CreateRuleRouteInput = z.output<typeof createRuleSchema>;
 
 export const listRulesSchema = z.object({
-  spaceId: uuidSchema,
   status: z.enum(["active", "paused", "completed", "cancelled"]).optional(),
 });
 
@@ -87,7 +85,10 @@ export const ruleLogLookupSchema = z.object({
 
 export const ruleResponseSchema = z.object({
   id: z.string().uuid(),
-  spaceId: z.string().uuid(),
+  // `user.id` is text (Better Auth owns identity) — never a UUID. Validating it
+  // as one made output validation throw for every rule, so `recurring.list`
+  // returned nothing and `recurring.create` failed after inserting the row.
+  userId: z.string(),
   createdBy: z.string(),
   accountId: z.string().nullable(),
   destinationAccountId: z.string().nullable(),
@@ -137,7 +138,6 @@ export const ruleLogResponseSchema = z.object({
 // -- Occurrences (calendar view) -----------------------------------------------
 
 export const listOccurrencesSchema = z.object({
-  spaceId: uuidSchema,
   month: z.string().regex(/^\d{4}-\d{2}$/),
 });
 
@@ -162,13 +162,11 @@ export const projectedOccurrenceResponseSchema = z.object({
 });
 
 export const confirmOccurrenceSchema = z.object({
-  spaceId: uuidSchema,
   occurrenceId: uuidSchema,
   amount: z.union([z.number().positive(), z.string().trim().min(1)]),
 });
 
 export const skipOccurrenceSchema = z.object({
-  spaceId: uuidSchema,
   occurrenceId: uuidSchema,
   reason: z.string().trim().max(500).optional(),
 });

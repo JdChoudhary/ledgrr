@@ -3,34 +3,6 @@ import { pgEnum } from "drizzle-orm/pg-core";
 // Shared enums live here so tables that reuse the same domain concepts
 // (e.g. notification types) stay in sync without circular imports.
 
-export const spaceTypeEnum = pgEnum("space_type", [
-  "personal",
-  "household",
-  "family",
-  "couple",
-  "roommates",
-  "trip",
-  "group",
-  "professional",
-]);
-
-export const spaceMemberRoleEnum = pgEnum("space_member_role", [
-  "owner",
-  "admin",
-  "member",
-  "viewer",
-  "advisor",
-]);
-
-export const invitationRoleEnum = pgEnum("invitation_role", ["admin", "member", "viewer", "advisor"]);
-
-export const invitationStatusEnum = pgEnum("invitation_status", [
-  "pending",
-  "accepted",
-  "expired",
-  "revoked",
-]);
-
 export const friendshipStatusEnum = pgEnum("friendship_status", [
   "pending",
   "accepted",
@@ -48,7 +20,7 @@ export const accountTypeEnum = pgEnum("account_type", [
   "other",
 ]);
 
-export const accountVisibilityEnum = pgEnum("account_visibility", ["space", "restricted"]);
+export const accountVisibilityEnum = pgEnum("account_visibility", ["personal", "restricted"]);
 
 export const accountAccessEnum = pgEnum("account_access", ["view", "contribute", "manage"]);
 
@@ -140,6 +112,10 @@ export const debtSourceTypeEnum = pgEnum("debt_source_type", ["direct", "bill_sp
 
 export const themeEnum = pgEnum("theme", ["system", "light", "dark"]);
 
+// Households group people who pool part of their finances. The owner manages
+// membership and shared items; members contribute to shared budgets.
+export const householdRoleEnum = pgEnum("household_role", ["owner", "member"]);
+
 export const notificationTypeEnum = pgEnum("notification_type", [
   "budget_limit",
   "bill_due",
@@ -147,7 +123,6 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "recurring_upcoming",
   "low_balance",
   "weekly_summary",
-  "space_invite",
   "split_activity",
   "goal_contribution",
 ]);
@@ -208,12 +183,4 @@ export const analyticsJobStatusEnum = pgEnum("analytics_job_status", [
   "running",
   "completed",
   "failed",
-]);
-
-// Family relationships for parent-child permission model.
-export const familyRelationshipEnum = pgEnum("family_relationship", [
-  "parent",
-  "child",
-  "guardian",
-  "dependent",
 ]);

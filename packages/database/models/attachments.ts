@@ -1,5 +1,4 @@
 import { foreignKey, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { spaces } from "./spaces";
 import { transactions } from "./transactions";
 import { user } from "./auth-schema";
 
@@ -10,9 +9,9 @@ export const attachments = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     transactionId: uuid("transaction_id").notNull(),
 
     uploadedBy: text("uploaded_by")
@@ -32,8 +31,8 @@ export const attachments = pgTable(
   (table) => [
     foreignKey({
       name: "attachments_transaction_fkey",
-      columns: [table.transactionId, table.spaceId],
-      foreignColumns: [transactions.id, transactions.spaceId],
+      columns: [table.transactionId, table.userId],
+      foreignColumns: [transactions.id, transactions.userId],
     }),
   ],
 );

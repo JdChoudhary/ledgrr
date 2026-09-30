@@ -6,15 +6,16 @@ export * from "./models/auth-schema";
 export * from "./models/currencies";
 export * from "./models/exchange-rates";
 
-// Spaces
-export * from "./models/spaces";
-export * from "./models/space-members";
-export * from "./models/space-invitations";
-export * from "./models/family-relationships";
-
 // Friendships & contacts
 export * from "./models/friendships";
 export * from "./models/contacts";
+
+// Households & family sharing
+export * from "./models/households";
+export * from "./models/household-members";
+export * from "./models/household-categories";
+export * from "./models/household-category-links";
+export * from "./models/household-budgets";
 
 // Financial accounts
 export * from "./models/financial-accounts";
@@ -69,7 +70,7 @@ export * from "./models/audit-logs";
 
 // Financial analytics
 export * from "./models/daily-account-summaries";
-export * from "./models/daily-space-category-summaries";
+export * from "./models/daily-category-summaries";
 export * from "./models/financial-snapshots";
 export * from "./models/account-snapshots";
 export * from "./models/analytics-rebuild-jobs";

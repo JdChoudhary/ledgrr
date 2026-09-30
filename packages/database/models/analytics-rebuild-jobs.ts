@@ -1,14 +1,14 @@
 import { date, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { analyticsJobStatusEnum, analyticsMetricTypeEnum } from "./enums";
-import { spaces } from "./spaces";
+import { user } from "./auth-schema";
 
 // Used for drift repair and analytics migrations.
 export const analyticsRebuildJobs = pgTable("analytics_rebuild_jobs", {
   id: uuid("id").primaryKey().defaultRandom(),
 
-  spaceId: uuid("space_id")
+  userId: text("user_id")
     .notNull()
-    .references(() => spaces.id),
+    .references(() => user.id),
 
   metricType: analyticsMetricTypeEnum("metric_type").notNull(),
 

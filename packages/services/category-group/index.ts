@@ -2,7 +2,6 @@ import { and, asc, db, eq, isNull } from "@repo/database";
 import { categoryGroups, type SelectCategoryGroup } from "@repo/database/schema";
 import { ServiceError, isUniqueViolation } from "../lib/errors";
 import { parseInput } from "../lib/schema";
-import { assertActiveSpaceMember } from "../space";
 import {
   categoryGroupLookupInputSchema,
   createCategoryGroupInputSchema,
@@ -17,42 +16,39 @@ import {
 /**
  * Category group service.
  *
- * Any active space member may manage groups; membership (not friendship) is
- * the authorization boundary. Groups are archived, never deleted, so category
+ * Groups are scoped per user. Groups are archived, never deleted, so category
  * and transaction history keeps referring to something meaningful.
  */
 
-const CATEGORY_GROUP_NAME_CONSTRAINT = "category_groups_space_name_unique";
+const CATEGORY_GROUP_NAME_CONSTRAINT = "category_groups_user_name_unique";
 
 const findCategoryGroup = async (
-  spaceId: string,
+  actorUserId: string,
   categoryGroupId: string,
 ): Promise<SelectCategoryGroup | undefined> => {
   const [group] = await db
     .select()
     .from(categoryGroups)
-    .where(and(eq(categoryGroups.id, categoryGroupId), eq(categoryGroups.spaceId, spaceId)))
+    .where(and(eq(categoryGroups.id, categoryGroupId), eq(categoryGroups.userId, actorUserId)))
     .limit(1);
 
   return group;
 };
 
-/** Creates a group in a space the actor is an active member of. */
+/** Creates a user-scoped category group. */
 export async function createCategoryGroup(
   input: CreateCategoryGroupInput,
 ): Promise<SelectCategoryGroup> {
-  const { spaceId, actorUserId, name, sortOrder } = parseInput(
+  const { actorUserId, name, sortOrder } = parseInput(
     createCategoryGroupInputSchema,
     input,
     "createCategoryGroup input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   try {
     const [group] = await db
       .insert(categoryGroups)
-      .values({ spaceId, createdBy: actorUserId, name, sortOrder })
+      .values({ userId: actorUserId, createdBy: actorUserId, name, sortOrder })
       .returning();
 
     if (!group) {
@@ -73,29 +69,27 @@ export async function createCategoryGroup(
 export async function updateCategoryGroup(
   input: UpdateCategoryGroupInput,
 ): Promise<SelectCategoryGroup> {
-  const { spaceId, actorUserId, categoryGroupId, name, sortOrder } = parseInput(
+  const { actorUserId, categoryGroupId, name, sortOrder } = parseInput(
     updateCategoryGroupInputSchema,
     input,
     "updateCategoryGroup input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  const existing = await findCategoryGroup(spaceId, categoryGroupId);
+  const existing = await findCategoryGroup(actorUserId, categoryGroupId);
 
   if (!existing) {
-    throw new ServiceError("NOT_FOUND", "Category group not found in this space");
+    throw new ServiceError("NOT_FOUND", "Category group not found for this user");
   }
 
   try {
     const [group] = await db
       .update(categoryGroups)
       .set({ name, sortOrder })
-      .where(and(eq(categoryGroups.id, categoryGroupId), eq(categoryGroups.spaceId, spaceId)))
+      .where(and(eq(categoryGroups.id, categoryGroupId), eq(categoryGroups.userId, actorUserId)))
       .returning();
 
     if (!group) {
-      throw new ServiceError("NOT_FOUND", "Category group not found in this space");
+      throw new ServiceError("NOT_FOUND", "Category group not found for this user");
     }
 
     return group;
@@ -112,13 +106,11 @@ export async function updateCategoryGroup(
 export async function archiveCategoryGroup(
   input: CategoryGroupLookupInput,
 ): Promise<SelectCategoryGroup> {
-  const { spaceId, actorUserId, categoryGroupId } = parseInput(
+  const { actorUserId, categoryGroupId } = parseInput(
     categoryGroupLookupInputSchema,
     input,
     "archiveCategoryGroup input",
   );
-
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   const [group] = await db
     .update(categoryGroups)
@@ -126,7 +118,7 @@ export async function archiveCategoryGroup(
     .where(
       and(
         eq(categoryGroups.id, categoryGroupId),
-        eq(categoryGroups.spaceId, spaceId),
+        eq(categoryGroups.userId, actorUserId),
         isNull(categoryGroups.archivedAt),
       ),
     )
@@ -143,60 +135,54 @@ export async function archiveCategoryGroup(
 export async function unarchiveCategoryGroup(
   input: CategoryGroupLookupInput,
 ): Promise<SelectCategoryGroup> {
-  const { spaceId, actorUserId, categoryGroupId } = parseInput(
+  const { actorUserId, categoryGroupId } = parseInput(
     categoryGroupLookupInputSchema,
     input,
     "unarchiveCategoryGroup input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
   const [group] = await db
     .update(categoryGroups)
     .set({ archivedAt: null })
-    .where(and(eq(categoryGroups.id, categoryGroupId), eq(categoryGroups.spaceId, spaceId)))
+    .where(and(eq(categoryGroups.id, categoryGroupId), eq(categoryGroups.userId, actorUserId)))
     .returning();
 
   if (!group) {
-    throw new ServiceError("NOT_FOUND", "Category group not found in this space");
+    throw new ServiceError("NOT_FOUND", "Category group not found for this user");
   }
 
   return group;
 }
 
-/** Returns one group, or `null` when it is not in the space. */
+/** Returns one group, or `null` when it is not owned by the user. */
 export async function getCategoryGroup(
   input: CategoryGroupLookupInput,
 ): Promise<SelectCategoryGroup | null> {
-  const { spaceId, actorUserId, categoryGroupId } = parseInput(
+  const { actorUserId, categoryGroupId } = parseInput(
     categoryGroupLookupInputSchema,
     input,
     "getCategoryGroup input",
   );
 
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
-
-  return (await findCategoryGroup(spaceId, categoryGroupId)) ?? null;
+  return (await findCategoryGroup(actorUserId, categoryGroupId)) ?? null;
 }
 
-/** Groups in a space, ordered for display. */
+/** Groups owned by the user, ordered for display. */
 export async function listCategoryGroups(
   input: ListCategoryGroupsInput,
 ): Promise<ReadonlyArray<SelectCategoryGroup>> {
-  const { spaceId, actorUserId, includeArchived } = parseInput(
+  const { actorUserId, includeArchived } = parseInput(
     listCategoryGroupsInputSchema,
     input,
     "listCategoryGroups input",
   );
-
-  await assertActiveSpaceMember({ spaceId, userId: actorUserId });
 
   return db
     .select()
     .from(categoryGroups)
     .where(
       and(
-        eq(categoryGroups.spaceId, spaceId),
+        eq(categoryGroups.userId, actorUserId),
         includeArchived ? undefined : isNull(categoryGroups.archivedAt),
       ),
     )

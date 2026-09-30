@@ -32,7 +32,7 @@ const getPath = generatePath("/tags");
 
 const tagResponseSchema = z.object({
   id: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   createdBy: z.string(),
   name: z.string(),
   color: z.string(),

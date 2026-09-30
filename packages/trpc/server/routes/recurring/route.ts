@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { uuidSchema } from "@repo/services/lib/schema";
 import { router, authenticatedProcedure } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 import {
@@ -31,9 +30,7 @@ import {
 const TAGS = ["Recurring"] as string[];
 const getPath = generatePath("/recurring");
 
-const catchUpInputSchema = z.object({
-  spaceId: uuidSchema,
-});
+const catchUpInputSchema = z.object({});
 
 const catchUpOutputSchema = z.object({
   posted: z.number().int(),
@@ -43,7 +40,7 @@ const catchUpOutputSchema = z.object({
 
 export const recurringRouter = router({
   // -- Lazy catch-up -----------------------------------------------------------
-  // Posts every due occurrence for this space. Idempotent — safe to call on
+  // Posts every due occurrence for this user. Idempotent — safe to call on
   // every app load; a background scheduler can call the same service entry.
 
   catchUp: authenticatedProcedure
@@ -53,7 +50,7 @@ export const recurringRouter = router({
     .input(catchUpInputSchema)
     .output(catchUpOutputSchema)
     .mutation(async ({ input, ctx }) => {
-      return runDueRules({ spaceId: input.spaceId, actorUserId: ctx.user.id });
+      return runDueRules({ actorUserId: ctx.user.id });
     }),
   // -- Create -----------------------------------------------------------------
 

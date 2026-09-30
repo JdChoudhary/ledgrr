@@ -8,12 +8,7 @@ import {
   ArrowUpRightIcon,
   BanknoteIcon,
   HandCoinsIcon,
-  HomeIcon,
-  LandmarkIcon,
-  PlusIcon,
   UserPlusIcon,
-  UsersIcon,
-  WalletIcon,
 } from "lucide-react";
 
 import { cn } from "cn";
@@ -21,10 +16,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { useSpaces } from "~/hooks/api/space";
 import { useFriendships } from "~/hooks/api/friendship";
 import { useDebts } from "~/hooks/api/debt";
 import { DashboardHeader } from "@/features/dashboard/components/dashboard-header";
@@ -33,44 +26,6 @@ import { DashboardHeader } from "@/features/dashboard/components/dashboard-heade
 // Helpers
 // ---------------------------------------------------------------------------
 
-const SPACE_TYPE_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  personal: {
-    label: "Personal",
-    icon: HomeIcon,
-    color: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-  },
-  household: {
-    label: "Household",
-    icon: HomeIcon,
-    color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  },
-  family: {
-    label: "Family",
-    icon: UsersIcon,
-    color: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
-  },
-  couple: {
-    label: "Couple",
-    icon: UsersIcon,
-    color: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-  },
-  roommates: {
-    label: "Roommates",
-    icon: LandmarkIcon,
-    color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  },
-  trip: {
-    label: "Trip",
-    icon: WalletIcon,
-    color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  },
-  group: {
-    label: "Group",
-    icon: UsersIcon,
-    color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
-  },
-};
-
 const initialsOf = (name: string): string =>
   name
     .trim()
@@ -78,15 +33,6 @@ const initialsOf = (name: string): string =>
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
-
-const fmt =
-  (currency: string) =>
-  (value: number): string =>
-    new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
 
 // ---------------------------------------------------------------------------
 // Section card — reusable wrapper for summary sections
@@ -135,84 +81,6 @@ function SectionCard({
         />
       </CardContent>
     </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Spaces preview
-// ---------------------------------------------------------------------------
-
-function SpacesPreview() {
-  const spaces = useSpaces({});
-
-  if (spaces.isPending) {
-    return (
-      <div className="space-y-2">
-        <Skeleton className="h-12" />
-        <Skeleton className="h-12" />
-      </div>
-    );
-  }
-
-  const rows = (spaces.spaces ?? []).filter(
-    (r) => r.space.archivedAt == null && r.space.type !== "personal",
-  );
-  const totalSpaces = rows.length;
-  const sharedSpaces = rows.filter((r) => r.space.type !== "personal");
-
-  return (
-    <SectionCard
-      title="Shared Spaces"
-      description={`${totalSpaces} active space${totalSpaces === 1 ? "" : "s"}`}
-      icon={UsersIcon}
-      count={totalSpaces}
-      href="/dashboard/together/spaces"
-    >
-      {sharedSpaces.length === 0 ? (
-        <p className="py-2 text-center text-xs text-muted-foreground">
-          No shared spaces yet. Create one to track money with others.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {sharedSpaces.slice(0, 3).map((row) => {
-            const meta = SPACE_TYPE_META[row.space.type] ?? SPACE_TYPE_META.personal;
-            const TypeIcon = meta.icon;
-            return (
-              <Link
-                key={row.membershipId}
-                href="/dashboard/together/spaces"
-                className="flex items-center gap-3 rounded-md border px-3 py-2 transition-colors hover:bg-muted/50"
-              >
-                <span
-                  className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-lg",
-                    meta.color,
-                  )}
-                >
-                  <TypeIcon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{row.space.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {meta.label} · {row.role}
-                  </p>
-                </div>
-                {row.space.billSplitting ? (
-                  <Badge variant="secondary" className="text-[10px]">
-                    splits
-                  </Badge>
-                ) : null}
-              </Link>
-            );
-          })}
-          {sharedSpaces.length > 3 ? (
-            <p className="text-center text-[11px] text-muted-foreground">
-              +{sharedSpaces.length - 3} more
-            </p>
-          ) : null}
-        </div>
-      )}
-    </SectionCard>
   );
 }
 
@@ -399,14 +267,9 @@ function DebtsPreview() {
 // ---------------------------------------------------------------------------
 
 export function TogetherOverview() {
-  const spaces = useSpaces({});
   const friendships = useFriendships({});
   const debts = useDebts({});
 
-  const allSpaces = spaces.spaces ?? [];
-  const sharedSpaces = allSpaces.filter(
-    (r) => r.space.archivedAt == null && r.space.type !== "personal",
-  );
   const allFriends = friendships.friendships ?? [];
   const friends = allFriends.filter((r) => r.status === "accepted");
   const pendingRequests = allFriends.filter(
@@ -414,6 +277,14 @@ export function TogetherOverview() {
   );
   const allDebts = debts.debts ?? [];
   const openDebts = allDebts.filter((r) => r.status === "open" || r.status === "partially_settled");
+  const owedToMe = openDebts
+    .filter((r) => r.debt.creditorUserId != null)
+    .reduce((acc, r) => acc + Number(r.outstandingAmount), 0);
+  const owedByMe = openDebts
+    .filter((r) => r.debt.debtorUserId != null)
+    .reduce((acc, r) => acc + Number(r.outstandingAmount), 0);
+
+  const isLoading = friendships.isPending || debts.isPending;
 
   return (
     <>
@@ -422,10 +293,10 @@ export function TogetherOverview() {
         description="Manage shared finances, friends, and obligations"
         actions={
           <div className="flex items-center gap-2">
-            <Link href="/dashboard/together/spaces">
+            <Link href="/dashboard/together/friends">
               <Button size="sm">
-                <PlusIcon className="size-4" />
-                New space
+                <UserPlusIcon className="size-4" />
+                Find friends
               </Button>
             </Link>
           </div>
@@ -435,7 +306,7 @@ export function TogetherOverview() {
       <div className="p-4 md:p-6">
         <div className="flex flex-col gap-6">
           {/* Summary stats */}
-          {spaces.isPending ? (
+          {isLoading ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Skeleton className="h-20" />
               <Skeleton className="h-20" />
@@ -444,12 +315,6 @@ export function TogetherOverview() {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardContent className="flex flex-col gap-1 px-4 py-3">
-                  <span className="text-xs text-muted-foreground">Shared Spaces</span>
-                  <span className="text-2xl font-semibold tabular-nums">{sharedSpaces.length}</span>
-                </CardContent>
-              </Card>
               <Card>
                 <CardContent className="flex flex-col gap-1 px-4 py-3">
                   <span className="text-xs text-muted-foreground">Friends</span>
@@ -469,19 +334,26 @@ export function TogetherOverview() {
               </Card>
               <Card>
                 <CardContent className="flex flex-col gap-1 px-4 py-3">
-                  <span className="text-xs text-muted-foreground">Total Members</span>
-                  <span className="text-2xl font-semibold tabular-nums">
-                    {sharedSpaces.reduce((acc, r) => acc + (r.space.sharedLedger ? 2 : 1), 0)}
+                  <span className="text-xs text-muted-foreground">Owed to you</span>
+                  <span className="text-2xl font-semibold tabular-nums text-emerald-600">
+                    {owedToMe > 0 ? `+${owedToMe.toFixed(0)}` : "—"}
+                  </span>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="flex flex-col gap-1 px-4 py-3">
+                  <span className="text-xs text-muted-foreground">You owe</span>
+                  <span className="text-2xl font-semibold tabular-nums text-red-600">
+                    {owedByMe > 0 ? `−${owedByMe.toFixed(0)}` : "—"}
                   </span>
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Two-column layout: Spaces + Friends on left, Debts on right */}
+          {/* Two-column layout: Friends on left, Debts on right */}
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
-              <SpacesPreview />
               <FriendsPreview />
             </div>
             <div>
@@ -495,13 +367,7 @@ export function TogetherOverview() {
               <CardTitle className="text-sm font-semibold">Quick actions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <Link href="/dashboard/together/spaces">
-                  <Button variant="outline" className="w-full justify-start gap-2">
-                    <UsersIcon className="size-4" />
-                    Create shared space
-                  </Button>
-                </Link>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <Link href="/dashboard/together/friends">
                   <Button variant="outline" className="w-full justify-start gap-2">
                     <UserPlusIcon className="size-4" />

@@ -7,6 +7,7 @@ import {
   FileUp,
   HandCoins,
   Home,
+  House,
   Landmark,
   MoreHorizontal,
   PieChart,
@@ -133,12 +134,6 @@ export const navigation: NavigationItem[] = [
         icon: Users,
       },
       {
-        id: "spaces",
-        label: "Spaces",
-        href: "/dashboard/together/spaces",
-        icon: Users,
-      },
-      {
         id: "friends",
         label: "Friends",
         href: "/dashboard/together/friends",
@@ -149,6 +144,12 @@ export const navigation: NavigationItem[] = [
         label: "Debts",
         href: "/dashboard/debts",
         icon: HandCoins,
+      },
+      {
+        id: "household",
+        label: "Household",
+        href: "/dashboard/household",
+        icon: House,
       },
     ],
   },

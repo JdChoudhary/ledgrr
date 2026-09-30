@@ -86,17 +86,16 @@ type ManagerGroup = {
 };
 
 type CategoryManagerProps = {
-  spaceId: string | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManagerProps) {
+export function CategoryManager({ open, onOpenChange }: CategoryManagerProps) {
   const utils = trpc.useUtils();
 
   // Only fetch while the sheet is open.
-  const categoriesQuery = useCategories(spaceId && open ? { spaceId: spaceId! } : undefined);
-  const groupsQuery = useCategoryGroups(spaceId && open ? { spaceId: spaceId! } : undefined);
+  const categoriesQuery = useCategories(open ? {} : undefined);
+  const groupsQuery = useCategoryGroups(open ? {} : undefined);
 
   const { updateCategoryAsync } = useUpdateCategory();
   const { archiveCategoryAsync } = useArchiveCategory();
@@ -190,13 +189,12 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
 
   const persistPositions = React.useCallback(
     async (moves: Array<{ id: string; groupId: string | null; sortOrder: number }>) => {
-      if (!spaceId || moves.length === 0) return;
+      if (moves.length === 0) return;
       setSaving(true);
       try {
         await Promise.all(
           moves.map((move) =>
             updateCategoryAsync({
-              spaceId,
               categoryId: move.id,
               groupId: move.groupId,
               sortOrder: move.sortOrder,
@@ -211,7 +209,7 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
         setSaving(false);
       }
     },
-    [spaceId, updateCategoryAsync, refresh],
+    [updateCategoryAsync, refresh],
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -287,9 +285,9 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
   const saveEditCat = async (category: ManagerCategory) => {
     const next = editName.trim();
     setEditingCat(null);
-    if (!spaceId || !next || next === category.name) return;
+    if (!next || next === category.name) return;
     try {
-      await updateCategoryAsync({ spaceId, categoryId: category.id, name: next });
+      await updateCategoryAsync({ categoryId: category.id, name: next });
       await refresh();
     } catch (error) {
       toast.error("Couldn't rename the category", errorMessage(error));
@@ -297,27 +295,24 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
   };
 
   const changeCatColor = async (categoryId: string, color: string) => {
-    if (!spaceId) return;
     try {
-      await updateCategoryAsync({ spaceId, categoryId, color });
+      await updateCategoryAsync({ categoryId, color });
     } catch (error) {
       toast.error("Couldn't update the colour", errorMessage(error));
     }
   };
 
   const changeCatType = async (categoryId: string, type: "income" | "expense") => {
-    if (!spaceId) return;
     try {
-      await updateCategoryAsync({ spaceId, categoryId, type });
+      await updateCategoryAsync({ categoryId, type });
     } catch (error) {
       toast.error("Couldn't change the type", errorMessage(error));
     }
   };
 
   const deleteCat = async (category: ManagerCategory) => {
-    if (!spaceId) return;
     try {
-      await archiveCategoryAsync({ spaceId, categoryId: category.id });
+      await archiveCategoryAsync({ categoryId: category.id });
       await refresh();
       toast.success(`"${category.name}" archived`);
     } catch (error) {
@@ -329,9 +324,9 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
   const saveGroupName = async (group: ManagerGroup) => {
     const next = editGroupName.trim();
     setEditingGroup(null);
-    if (!spaceId || !next || next === group.name) return;
+    if (!next || next === group.name) return;
     try {
-      await updateCategoryGroupAsync({ spaceId, categoryGroupId: group.id, name: next });
+      await updateCategoryGroupAsync({ categoryGroupId: group.id, name: next });
       await refresh();
     } catch (error) {
       toast.error("Couldn't rename the group", errorMessage(error));
@@ -339,13 +334,12 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
   };
 
   const deleteGroup = async (group: ManagerGroup) => {
-    if (!spaceId) return;
     try {
-      await archiveCategoryGroupAsync({ spaceId, categoryGroupId: group.id });
+      await archiveCategoryGroupAsync({ categoryGroupId: group.id });
       const inGroup = categories.filter((c) => c.groupId === group.id);
       await Promise.all(
         inGroup.map((c) =>
-          updateCategoryAsync({ spaceId, categoryId: c.id, groupId: null }),
+          updateCategoryAsync({ categoryId: c.id, groupId: null }),
         ),
       );
       await refresh();
@@ -357,9 +351,9 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
 
   const createGroup = async () => {
     const name = newGroupName.trim();
-    if (!spaceId || !name) return;
+    if (!name) return;
     try {
-      await createCategoryGroupAsync({ spaceId, name, sortOrder: groups.length });
+      await createCategoryGroupAsync({ name, sortOrder: groups.length });
       await refresh();
       setNewGroupName("");
       setCreatingGroup(false);
@@ -518,7 +512,6 @@ export function CategoryManager({ spaceId, open, onOpenChange }: CategoryManager
       <CategoryFormDialog
         open={categoryForm.open}
         onOpenChange={(open) => setCategoryForm((prev) => ({ ...prev, open }))}
-        spaceId={spaceId}
         groups={groups}
         defaultGroupId={categoryForm.groupId}
         nextSortOrder={categories.length}

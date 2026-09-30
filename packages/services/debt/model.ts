@@ -105,16 +105,33 @@ export const cancelDebtInputSchema = z.object({
 export type CancelDebtInput = z.input<typeof cancelDebtInputSchema>;
 
 // -------------------------------------------------------------------
+// Mutual settlement (netting)
+// -------------------------------------------------------------------
+
+/**
+ * Cancels out mutual obligations between the actor and one counterparty: the
+ * offsetting `amount` is applied as *paired* settlements — once against each
+ * debt the counterparty owes the actor and once against each debt the actor
+ * owes the counterparty — so the net balance is preserved while the overlap
+ * disappears from both sides.
+ */
+export const settleMutualInputSchema = z.object({
+  actorUserId: userIdSchema,
+  counterpartyUserId: userIdSchema,
+  amount: positiveMoneySchema(),
+  /** Optional ledger date; defaults to today. */
+  paidOn: dateSchema.nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+
+export type SettleMutualInput = z.input<typeof settleMutualInputSchema>;
+
+// -------------------------------------------------------------------
 // Shared bits
 // -------------------------------------------------------------------
 
 /** Derived lifecycle status kept in sync with the service response shape. */
-export const debtStatusSchema = z.enum([
-  "open",
-  "partially_settled",
-  "settled",
-  "cancelled",
-]);
+export const debtStatusSchema = z.enum(["open", "partially_settled", "settled", "cancelled"]);
 
 /** Balance summary for a counterparty, derived on the fly (never stored). */
 export const counterpartyBalanceSchema = z.object({

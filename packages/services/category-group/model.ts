@@ -4,15 +4,14 @@ import { userIdSchema, uuidSchema } from "../lib/schema";
 /**
  * Input contracts for the category group service.
  *
- * Category groups are a space-scoped, one-level grouping of categories.
- * Names are unique per space (case-insensitive).
+ * Category groups are a user-scoped, one-level grouping of categories.
+ * Names are unique per user (case-insensitive).
  */
 
 const categoryGroupNameSchema = z.string().trim().min(1).max(80);
 const sortOrderSchema = z.number().int().min(0).max(1_000_000);
 
 export const createCategoryGroupInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   name: categoryGroupNameSchema,
   sortOrder: sortOrderSchema.optional().default(0),
@@ -22,7 +21,6 @@ export type CreateCategoryGroupInput = z.input<typeof createCategoryGroupInputSc
 
 export const updateCategoryGroupInputSchema = z
   .object({
-    spaceId: uuidSchema,
     actorUserId: userIdSchema,
     categoryGroupId: uuidSchema,
     name: categoryGroupNameSchema.optional(),
@@ -35,7 +33,6 @@ export const updateCategoryGroupInputSchema = z
 export type UpdateCategoryGroupInput = z.input<typeof updateCategoryGroupInputSchema>;
 
 export const categoryGroupLookupInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   categoryGroupId: uuidSchema,
 });
@@ -43,7 +40,6 @@ export const categoryGroupLookupInputSchema = z.object({
 export type CategoryGroupLookupInput = z.input<typeof categoryGroupLookupInputSchema>;
 
 export const listCategoryGroupsInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   includeArchived: z.boolean().optional().default(false),
 });

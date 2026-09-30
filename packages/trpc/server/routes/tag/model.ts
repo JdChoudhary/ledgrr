@@ -6,14 +6,12 @@ import { hexColorSchema, uuidSchema } from "@repo/services/lib/schema";
 // -------------------------------------------------------------------
 
 export const createTagSchema = z.object({
-  spaceId: uuidSchema,
   name: z.string().trim().min(1).max(60),
   color: hexColorSchema,
 });
 
 export const updateTagSchema = z
   .object({
-    spaceId: uuidSchema,
     tagId: uuidSchema,
     name: z.string().trim().min(1).max(60).optional(),
     color: hexColorSchema.optional(),
@@ -23,12 +21,10 @@ export const updateTagSchema = z
   });
 
 export const tagLookupSchema = z.object({
-  spaceId: uuidSchema,
   tagId: uuidSchema,
 });
 
 export const listTagsSchema = z.object({
-  spaceId: uuidSchema,
   includeArchived: z.boolean().optional().default(false),
 });
 
@@ -37,18 +33,15 @@ export const listTagsSchema = z.object({
 // -------------------------------------------------------------------
 
 export const attachTagSchema = z.object({
-  spaceId: uuidSchema,
   transactionId: uuidSchema,
   tagId: uuidSchema,
 });
 
 export const detachTagSchema = z.object({
-  spaceId: uuidSchema,
   transactionId: uuidSchema,
   tagId: uuidSchema,
 });
 
 export const listTransactionTagsSchema = z.object({
-  spaceId: uuidSchema,
   transactionId: uuidSchema,
 });

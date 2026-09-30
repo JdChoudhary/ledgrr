@@ -20,7 +20,6 @@ export const eventCategorySchema = z.enum([
   "goal",
   "debt",
   "account",
-  "space",
   "bill_split",
   "recurring",
   "navigation",
@@ -29,7 +28,6 @@ export const eventCategorySchema = z.enum([
 export const recordEventInputSchema = z.object({
   actorUserId: userIdSchema,
 
-  spaceId: uuidSchema.nullable().optional(),
   sessionId: uuidSchema.nullable().optional(),
 
   eventName: z.string().trim().min(1).max(120),
@@ -55,7 +53,6 @@ export type RecordEventInput = z.input<typeof recordEventInputSchema>;
 // ---------------------------------------------------------------------------
 
 export const dashboardSummaryInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   /** Inclusive ledger-date range. Defaults to the current calendar month. */
   fromDate: dateSchema.nullable().optional(),
@@ -72,7 +69,7 @@ export type DashboardSummary = {
   income: string;
   /** Personal expense: the actor's own share (personal_amount), not gross. */
   personalExpense: string;
-  /** Gross expense across the space's transactions. */
+  /** Gross expense across the user's transactions. */
   grossExpense: string;
   refund: string;
   transactionCount: number;
@@ -86,7 +83,6 @@ export type DashboardSummary = {
 // ---------------------------------------------------------------------------
 
 export const cashflowInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   fromDate: dateSchema,
   toDate: dateSchema,
@@ -105,7 +101,6 @@ export type CashflowPoint = {
 // ---------------------------------------------------------------------------
 
 export const categoryBreakdownInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   fromDate: dateSchema,
   toDate: dateSchema,
@@ -125,7 +120,6 @@ export type CategoryBreakdownRow = {
 // ---------------------------------------------------------------------------
 
 export const fundFlowInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   fromDate: dateSchema,
   toDate: dateSchema,
@@ -171,14 +165,12 @@ export type FundFlow = {
 
 export const listEventsServiceSchema = z.object({
   actorUserId: userIdSchema,
-  spaceId: uuidSchema.nullable().optional(),
   limit: z.number().int().min(1).max(200).optional().default(50),
 });
 
 export type AnalyticsEventItem = {
   id: string;
   userId: string;
-  spaceId: string | null;
   eventName: string;
   eventCategory: string | null;
   entityType: string | null;
@@ -195,7 +187,6 @@ export const analyticsPeriodEnum = z.enum(["month", "quarter", "year", "all"]);
 export type AnalyticsPeriod = z.infer<typeof analyticsPeriodEnum>;
 
 export const analyticsOverviewInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   period: analyticsPeriodEnum.optional().default("month"),
   /** Explicit range overrides `period` when both are provided. */
@@ -247,7 +238,6 @@ export type AnalyticsOverview = {
 // ---------------------------------------------------------------------------
 
 export const analyticsDashboardDataInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   months: z.number().int().min(1).max(36).optional().default(12),
   /** Explicit range overrides `months` when both are provided. */
@@ -267,7 +257,6 @@ export type AnalyticsDashboardData = {
 // ---------------------------------------------------------------------------
 
 export const dailySeriesInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   /** Inclusive end date of the window; defaults to today. Never in the future. */
   cursor: dateSchema.nullable().optional(),
@@ -291,7 +280,6 @@ export type DailySeries = {
 // ---------------------------------------------------------------------------
 
 export const yearlySeriesInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   /** Calendar year to load; defaults to the current year. */
   year: z.number().int().min(1970).max(2100).nullable().optional(),
@@ -317,7 +305,6 @@ export type YearlySeries = {
 // ---------------------------------------------------------------------------
 
 export const netWorthInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
 });
 
@@ -339,7 +326,6 @@ export type NetWorthCurrent = {
 };
 
 export const netWorthHistoryInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   limit: z.number().int().min(1).max(365).optional().default(90),
 });
@@ -361,7 +347,6 @@ export type NetWorthHistory = {
 };
 
 export const netWorthProjectionInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   months: z.number().int().min(1).max(36).optional().default(12),
 });
@@ -402,7 +387,6 @@ export type NetWorthProjection = {
 // ---------------------------------------------------------------------------
 
 export const comparisonInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   fromDate: dateSchema,
   toDate: dateSchema,
@@ -423,7 +407,6 @@ export type SpendingVelocity = {
 };
 
 export const topMerchantsInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   fromDate: dateSchema,
   toDate: dateSchema,
@@ -440,7 +423,6 @@ export type TopMerchantRow = {
 };
 
 export const monthlyTrendInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   months: z.number().int().min(1).max(36).optional().default(6),
 });
@@ -450,7 +432,6 @@ export type MonthlyTrendInput = z.input<typeof monthlyTrendInputSchema>;
 export type MonthlyTrendRow = { month: string; income: number; expense: number; net: number };
 
 export const dailySpendInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   days: z.number().int().min(1).max(365).optional().default(90),
 });
@@ -473,7 +454,6 @@ export type DailySpend = {
 // ---------------------------------------------------------------------------
 
 export const netWorthForecastInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   /** Lookback window of completed months used for the historical basis. */
   months: z.number().int().min(1).max(24).optional().default(3),

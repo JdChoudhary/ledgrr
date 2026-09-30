@@ -6,16 +6,19 @@ import {
   listDebts,
   getCounterpartyBalance,
   settleDebt,
+  settleMutualDebts,
   cancelDebt,
 } from "@repo/services/debt";
 import {
   createDebtSchema,
   listDebtsSchema,
   settleDebtSchema,
+  settleMutualSchema,
   cancelDebtSchema,
   counterpartyBalanceSchema,
   debtListItemResponseSchema,
   counterpartyBalanceResponseSchema,
+  mutualSettlementResponseSchema,
 } from "./model";
 
 const TAGS = ["Debts"] as string[];
@@ -81,10 +84,7 @@ export const debtRouter = router({
     .output(debtListItemResponseSchema)
     .mutation(async ({ input, ctx }) => {
       const debt = await settleDebt({ ...input, actorUserId: ctx.user.id });
-      const outstanding = Math.max(
-        0,
-        Number(debt.amount) - Number(debt.paidAmount),
-      );
+      const outstanding = Math.max(0, Number(debt.amount) - Number(debt.paidAmount));
       const status =
         debt.cancelledAt != null
           ? ("cancelled" as const)
@@ -102,6 +102,17 @@ export const debtRouter = router({
       } as z.infer<typeof debtListItemResponseSchema>;
     }),
 
+  /** Cancels out mutual obligations: paired settlements applied to both directions. */
+  settleMutual: authenticatedProcedure
+    .meta({
+      openapi: { method: "POST", path: getPath("/mutual-settle"), tags: TAGS },
+    })
+    .input(settleMutualSchema)
+    .output(mutualSettlementResponseSchema)
+    .mutation(async ({ input, ctx }) => {
+      return settleMutualDebts({ ...input, actorUserId: ctx.user.id });
+    }),
+
   cancel: authenticatedProcedure
     .meta({
       openapi: { method: "POST", path: getPath("/{debtId}/cancel"), tags: TAGS },
@@ -113,10 +124,7 @@ export const debtRouter = router({
       return {
         debt,
         status: "cancelled" as const,
-        outstandingAmount: Math.max(
-          0,
-          Number(debt.amount) - Number(debt.paidAmount),
-        ).toFixed(4),
+        outstandingAmount: Math.max(0, Number(debt.amount) - Number(debt.paidAmount)).toFixed(4),
         creditorName: "",
         debtorName: "",
       } as z.infer<typeof debtListItemResponseSchema>;

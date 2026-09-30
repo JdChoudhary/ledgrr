@@ -2,13 +2,11 @@
 
 import * as React from "react";
 import {
-  AlertTriangleIcon,
   CoinsIcon,
   Loader2Icon,
   PlusIcon,
   SaveIcon,
 } from "lucide-react";
-
 
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -20,14 +18,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -41,7 +31,6 @@ import {
   useUserSettings,
   useUpdateUserSettings,
 } from "~/hooks/api/user-settings";
-import { useSpaces, useUpdateSpace } from "~/hooks/api/space";
 import { useSession } from "~/lib/auth-client";
 
 import { AddCurrencyDialog } from "./currency-add-dialog";
@@ -75,11 +64,8 @@ export function PreferencesTab() {
     selfUserId ? { retry: false } : undefined,
   );
   const currencies = useCurrencies(selfUserId ? {} : null);
-  const spaces = useSpaces({});
 
   const userSettings = settings.userSettings;
-  const space = spaces.spaces?.[0]?.space;
-  const spaceId = space?.id;
 
   const [displayCurrency, setDisplayCurrency] = React.useState("USD");
   const [locale, setLocale] = React.useState("en-US");
@@ -97,10 +83,6 @@ export function PreferencesTab() {
     setWeekStartDay(String(userSettings?.weekStartDay ?? 1));
   }
 
-  // Base currency confirmation (reference behavior)
-  const [showBaseConfirm, setShowBaseConfirm] = React.useState(false);
-  const [pendingBaseCurrency, setPendingBaseCurrency] = React.useState("");
-
   // Add currency (admin only)
   const [showAddCurrency, setShowAddCurrency] = React.useState(false);
 
@@ -109,19 +91,7 @@ export function PreferencesTab() {
     onError: (err) => toast.error(err.message),
   });
 
-  const updateSpace = useUpdateSpace({
-    onSuccess: () => {
-      toast.success(
-        "Base currency changed. Historical reports won't be recalculated.",
-      );
-      setShowBaseConfirm(false);
-      setPendingBaseCurrency("");
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
   const currencyOptions = currencies.currencies ?? [];
-  const baseCurrency = space?.baseCurrency ?? displayCurrency ?? "USD";
 
   const defaults = {
     displayCurrency: userSettings?.displayCurrency ?? "USD",
@@ -149,22 +119,6 @@ export function PreferencesTab() {
     }
     if (Object.keys(patch).length === 0) return;
     updateSettings.updateUserSettings(patch);
-  };
-
-  const handleBaseCurrencyChange = (next: string) => {
-    if (space?.baseCurrency && space.baseCurrency !== next) {
-      // Changing an existing base currency requires confirmation.
-      setPendingBaseCurrency(next);
-      setShowBaseConfirm(true);
-      return;
-    }
-    if (spaceId) updateSpace.updateSpace({ spaceId, baseCurrency: next });
-  };
-
-  const confirmBaseCurrencyChange = () => {
-    if (spaceId && pendingBaseCurrency) {
-      updateSpace.updateSpace({ spaceId, baseCurrency: pendingBaseCurrency });
-    }
   };
 
   return (
@@ -224,34 +178,6 @@ export function PreferencesTab() {
                   </Select>
                 </div>
 
-                {/* Base currency — space-level, with confirmation on change */}
-                <div className="space-y-2 rounded-lg border border-border/30 bg-muted/30 p-3">
-                  <Label className="text-xs font-medium">
-                    Base currency (for reports)
-                    <span className="ml-2 font-normal text-muted-foreground">
-                      Currently: {baseCurrency}
-                    </span>
-                  </Label>
-                  <p className="text-[11px] text-muted-foreground">
-                    Your active space&apos;s base currency. Changing it won&apos;t
-                    recalculate historical reports before the change.
-                  </p>
-                  <Select
-                    value={baseCurrency}
-                    onValueChange={(v) => v && handleBaseCurrencyChange(v)}
-                  >
-                    <SelectTrigger className="h-8 w-full max-w-xs text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currencyOptions.map((currency) => (
-                        <SelectItem key={currency.code} value={currency.code}>
-                          {currency.code}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </>
             )}
 
@@ -328,46 +254,6 @@ export function PreferencesTab() {
           </Button>
         </div>
       </form>
-
-      {/* Base currency change confirmation (reference behavior) */}
-      <Dialog open={showBaseConfirm} onOpenChange={setShowBaseConfirm}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangleIcon className="size-5 text-amber-500" />
-              Change base currency?
-            </DialogTitle>
-            <DialogDescription>
-              You&apos;re changing your base currency from{" "}
-              <strong>{space?.baseCurrency}</strong> to{" "}
-              <strong>{pendingBaseCurrency}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              <strong className="text-foreground">Important:</strong> Historical
-              reports and charts before this change will <em>not</em> be
-              recalculated. Only new data will use the new base currency.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowBaseConfirm(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={confirmBaseCurrencyChange}
-              disabled={updateSpace.isPending || pendingBaseCurrency === ""}
-            >
-              {updateSpace.isPending ? "Saving…" : "Confirm change"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Add currency (admin only) */}
       <AddCurrencyDialog

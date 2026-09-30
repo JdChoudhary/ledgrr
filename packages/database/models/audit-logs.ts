@@ -1,6 +1,5 @@
 import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { auditActionEnum, auditActorTypeEnum } from "./enums";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 // Append-only forensic history. Never an accounting source of truth, and never
@@ -14,8 +13,6 @@ export const auditLogs = pgTable(
 
     actorUserId: text("actor_user_id").references(() => user.id),
     actorType: auditActorTypeEnum("actor_type").notNull(),
-
-    spaceId: uuid("space_id").references(() => spaces.id),
 
     entityType: text("entity_type").notNull(),
     entityId: uuid("entity_id").notNull(),
@@ -34,7 +31,7 @@ export const auditLogs = pgTable(
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("audit_logs_space_created_at_idx").on(table.spaceId, table.createdAt)],
+  (table) => [index("audit_logs_actor_created_at_idx").on(table.actorUserId, table.createdAt)],
 );
 
 export type SelectAuditLog = typeof auditLogs.$inferSelect;

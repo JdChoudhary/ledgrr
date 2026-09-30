@@ -17,7 +17,7 @@ const accountTypeSchema = z.enum([
   "loan",
   "other",
 ]);
-const accountVisibilitySchema = z.enum(["space", "restricted"]);
+const accountVisibilitySchema = z.enum(["personal", "restricted"]);
 const accountAccessSchema = z.enum(["view", "contribute", "manage"]);
 
 /** Only these types carry a credit limit. */
@@ -49,11 +49,10 @@ const signedMoney = z
 
 export const createAccountSchema = z
   .object({
-    spaceId: uuidSchema,
     name: accountNameSchema,
     type: accountTypeSchema,
     currency: z.string().trim().min(3).max(10).optional(),
-    visibility: accountVisibilitySchema.optional().default("space"),
+    visibility: accountVisibilitySchema.optional().default("personal"),
     openingBalance: signedMoney.optional().default("0"),
     creditLimit: positiveMoney.optional(),
     color: hexColorSchema.optional(),
@@ -71,7 +70,6 @@ export const createAccountSchema = z
 
 export const updateAccountSchema = z
   .object({
-    spaceId: uuidSchema,
     accountId: uuidSchema,
     name: accountNameSchema.optional(),
     visibility: accountVisibilitySchema.optional(),
@@ -90,26 +88,22 @@ export const updateAccountSchema = z
   );
 
 export const accountLookupSchema = z.object({
-  spaceId: uuidSchema,
   accountId: uuidSchema,
 });
 
 export const listAccountsSchema = z.object({
-  spaceId: uuidSchema,
   type: accountTypeSchema.optional(),
   visibility: accountVisibilitySchema.optional(),
   includeArchived: z.boolean().optional().default(false),
 });
 
 export const grantAccountAccessSchema = z.object({
-  spaceId: uuidSchema,
   accountId: uuidSchema,
   targetUserId: z.string().trim().min(1).max(255),
   access: accountAccessSchema,
 });
 
 export const revokeAccountAccessSchema = z.object({
-  spaceId: uuidSchema,
   accountId: uuidSchema,
   targetUserId: z.string().trim().min(1).max(255),
 });

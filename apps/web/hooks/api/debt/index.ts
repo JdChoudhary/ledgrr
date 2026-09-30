@@ -16,9 +16,7 @@ type MutationOpts<TProcedure extends (...args: any) => any> = Parameters<TProced
 type ListDebtsInput = Parameters<typeof trpc.debt.list.useQuery>[0];
 
 /** Enriched debt row returned by debt.list. */
-export type DebtRecord = NonNullable<
-  ReturnType<typeof useDebts>["debts"]
->[number];
+export type DebtRecord = NonNullable<ReturnType<typeof useDebts>["debts"]>[number];
 
 export function useDebts(
   input: ListDebtsInput | undefined | null,
@@ -52,10 +50,7 @@ export function useDebts(
 }
 
 export function useCounterpartyBalance(
-  input:
-    | Parameters<typeof trpc.debt.counterpartyBalance.useQuery>[0]
-    | undefined
-    | null,
+  input: Parameters<typeof trpc.debt.counterpartyBalance.useQuery>[0] | undefined | null,
   opts?: QueryOpts<typeof trpc.debt.counterpartyBalance.useQuery>,
 ) {
   const {
@@ -85,9 +80,7 @@ export function useCounterpartyBalance(
   };
 }
 
-export function useCreateDebt(
-  opts?: MutationOpts<typeof trpc.debt.create.useMutation>,
-) {
+export function useCreateDebt(opts?: MutationOpts<typeof trpc.debt.create.useMutation>) {
   const utils = trpc.useUtils();
   const {
     mutateAsync: createDebtAsync,
@@ -119,9 +112,7 @@ export function useCreateDebt(
   };
 }
 
-export function useSettleDebt(
-  opts?: MutationOpts<typeof trpc.debt.settle.useMutation>,
-) {
+export function useSettleDebt(opts?: MutationOpts<typeof trpc.debt.settle.useMutation>) {
   const utils = trpc.useUtils();
   const {
     mutateAsync: settleDebtAsync,
@@ -153,9 +144,41 @@ export function useSettleDebt(
   };
 }
 
-export function useCancelDebt(
-  opts?: MutationOpts<typeof trpc.debt.cancel.useMutation>,
+export function useSettleMutualDebt(
+  opts?: MutationOpts<typeof trpc.debt.settleMutual.useMutation>,
 ) {
+  const utils = trpc.useUtils();
+  const {
+    mutateAsync: settleMutualDebtAsync,
+    mutate: settleMutualDebt,
+    error,
+    isError,
+    isPending,
+    isSuccess,
+    status,
+  } = trpc.debt.settleMutual.useMutation({
+    ...(opts as any),
+    onSuccess: async (...args) => {
+      await Promise.all([
+        utils.debt.list.invalidate(),
+        utils.debt.counterpartyBalance.invalidate(),
+      ]);
+      opts?.onSuccess?.(...args);
+    },
+  });
+
+  return {
+    settleMutualDebtAsync,
+    settleMutualDebt,
+    error,
+    isError,
+    isPending,
+    isSuccess,
+    status,
+  };
+}
+
+export function useCancelDebt(opts?: MutationOpts<typeof trpc.debt.cancel.useMutation>) {
   const utils = trpc.useUtils();
   const {
     mutateAsync: cancelDebtAsync,

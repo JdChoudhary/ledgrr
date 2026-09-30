@@ -29,7 +29,6 @@ import {
   useUpdateCategoryGroup,
 } from "~/hooks/api/category-group";
 import { useCategories, useUpdateCategory } from "~/hooks/api/category";
-import { useSpaces } from "~/hooks/api/space";
 
 type Group = NonNullable<
   ReturnType<typeof useCategoryGroups>["categoryGroups"]
@@ -140,11 +139,8 @@ function EditableRow({
  * the reference settings page's category list.
  */
 export function CategoriesTab() {
-  const spaces = useSpaces({});
-  const spaceId = spaces.spaces?.[0]?.space?.id;
-
-  const categories = useCategories(spaceId ? { spaceId } : null);
-  const categoryGroups = useCategoryGroups(spaceId ? { spaceId } : null);
+  const categories = useCategories({});
+  const categoryGroups = useCategoryGroups({});
 
   const [renaming, setRenaming] = React.useState<Renaming | null>(null);
   const [renameValue, setRenameValue] = React.useState("");
@@ -169,19 +165,17 @@ export function CategoriesTab() {
     direction: "up" | "down",
   ) => {
     const swapIndex = direction === "up" ? index - 1 : index + 1;
-    if (spaceId == null || swapIndex < 0 || swapIndex >= list.length) return;
+    if (swapIndex < 0 || swapIndex >= list.length) return;
 
     const a = list[index];
     const b = list[swapIndex];
     try {
       await Promise.all([
         updateCategoryGroupAsync({
-          spaceId,
           categoryGroupId: a.id,
           sortOrder: b.sortOrder,
         }),
         updateCategoryGroupAsync({
-          spaceId,
           categoryGroupId: b.id,
           sortOrder: a.sortOrder,
         }),
@@ -198,19 +192,17 @@ export function CategoriesTab() {
     direction: "up" | "down",
   ) => {
     const swapIndex = direction === "up" ? index - 1 : index + 1;
-    if (spaceId == null || swapIndex < 0 || swapIndex >= list.length) return;
+    if (swapIndex < 0 || swapIndex >= list.length) return;
 
     const a = list[index];
     const b = list[swapIndex];
     try {
       await Promise.all([
         updateCategoryAsync({
-          spaceId,
           categoryId: a.id,
           sortOrder: b.sortOrder,
         }),
         updateCategoryAsync({
-          spaceId,
           categoryId: b.id,
           sortOrder: a.sortOrder,
         }),
@@ -232,7 +224,7 @@ export function CategoriesTab() {
   };
 
   const confirmRename = async () => {
-    if (spaceId == null || !renaming) return;
+    if (!renaming) return;
     const name = renameValue.trim();
     if (!name) {
       cancelRename();
@@ -242,13 +234,11 @@ export function CategoriesTab() {
     try {
       if (renaming.kind === "group") {
         await updateCategoryGroupAsync({
-          spaceId,
           categoryGroupId: renaming.id,
           name,
         });
       } else {
         await updateCategoryAsync({
-          spaceId,
           categoryId: renaming.id,
           name,
         });

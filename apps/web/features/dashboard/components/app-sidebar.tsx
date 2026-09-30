@@ -13,6 +13,7 @@ import {
 
 import { DesktopNavigation } from "./desktop-navagition";
 import { SidebarUser } from "./sidebar-user";
+import { SearchCommand } from "./search-command";
 
 export function AppSidebar() {
   return (
@@ -25,6 +26,9 @@ export function AppSidebar() {
 
           <span className="font-semibold group-data-[collapsible=icon]:hidden">Ledgr</span>
         </Link>
+        <div className="group-data-[collapsible=icon]:hidden">
+          <SearchCommand />
+        </div>
       </SidebarHeader>
 
       <SidebarContent>

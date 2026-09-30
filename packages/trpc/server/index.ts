@@ -1,7 +1,6 @@
 import { router } from "./trpc";
 
 import { healthRouter } from "./routes/health/route";
-import { spaceRouter } from "./routes/space/route";
 import { categoryGroupRouter } from "./routes/category-group/route";
 import { categoryRouter } from "./routes/category/route";
 import { accountRouter } from "./routes/account/route";
@@ -14,6 +13,7 @@ import { currencyRouter } from "./routes/currency/route";
 import { transactionRouter } from "./routes/transaction/route";
 import { debtRouter } from "./routes/debt/route";
 import { contactsRouter } from "./routes/contacts/route";
+import { householdRouter } from "./routes/household/route";
 import { recurringRouter } from "./routes/recurring/route";
 import { profileRouter } from "./routes/profile/route";
 import { analyticsRouter } from "./routes/analytics/route";
@@ -21,7 +21,6 @@ import { dashboardRouter } from "./routes/dashboard/route";
 
 export const serverRouter = router({
   health: healthRouter,
-  space: spaceRouter,
   categoryGroup: categoryGroupRouter,
   category: categoryRouter,
   account: accountRouter,
@@ -31,6 +30,7 @@ export const serverRouter = router({
   tag: tagRouter,
   friend: friendshipRouter,
   contacts: contactsRouter,
+  household: householdRouter,
   currency: currencyRouter,
   transaction: transactionRouter,
   debt: debtRouter,

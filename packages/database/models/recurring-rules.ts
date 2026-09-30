@@ -26,7 +26,6 @@ import { categories } from "./categories";
 import { currencies } from "./currencies";
 import { financialAccounts } from "./financial-accounts";
 import { merchants } from "./merchants";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 export const recurringRules = pgTable(
@@ -38,11 +37,11 @@ export const recurringRules = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     /**
-     * Financial space this rule belongs to.
+     * User who owns this rule.
      */
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     /**
      * User who created the rule.
@@ -114,7 +113,7 @@ export const recurringRules = pgTable(
     /**
      * Currency of the recurring event.
      *
-     * Ledgr currently uses one base currency per space,
+     * Ledgr currently uses one base currency per user,
      * but keeping currency here makes the rule explicit.
      */
     currency: text("currency")
@@ -452,42 +451,42 @@ export const recurringRules = pgTable(
      * Needed by the composite foreign key from
      * recurring_rule_occurrences/logs.
      */
-    uniqueIndex("recurring_rules_id_space_id_unique").on(table.id, table.spaceId),
+    uniqueIndex("recurring_rules_id_user_id_unique").on(table.id, table.userId),
 
     /**
-     * Account must belong to the same space.
+     * Account must be owned by the same user.
      */
     foreignKey({
       name: "recurring_rules_account_fkey",
-      columns: [table.accountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.accountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
 
     /**
-     * Destination account must belong to the same space.
+     * Destination account must be owned by the same user.
      */
     foreignKey({
       name: "recurring_rules_destination_account_fkey",
-      columns: [table.destinationAccountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.destinationAccountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
 
     /**
-     * Category must belong to the same space.
+     * Category must be owned by the same user.
      */
     foreignKey({
       name: "recurring_rules_category_fkey",
-      columns: [table.categoryId, table.spaceId],
-      foreignColumns: [categories.id, categories.spaceId],
+      columns: [table.categoryId, table.userId],
+      foreignColumns: [categories.id, categories.userId],
     }),
 
     /**
-     * Merchant must belong to the same space.
+     * Merchant must be owned by the same user.
      */
     foreignKey({
       name: "recurring_rules_merchant_fkey",
-      columns: [table.merchantId, table.spaceId],
-      foreignColumns: [merchants.id, merchants.spaceId],
+      columns: [table.merchantId, table.userId],
+      foreignColumns: [merchants.id, merchants.userId],
     }),
   ],
 );

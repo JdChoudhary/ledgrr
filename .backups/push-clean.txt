@@ -1,0 +1,9 @@
+No config path provided, using default 'drizzle.config.ts'
+Reading config file 'C:\Users\JAGDEEP\Desktop\✅Projects\ledgr\packages\database\drizzle.config.ts'
+Reading schema files:
+C:\Users\JAGDEEP\Desktop\✅Projects\ledgr\packages\database\schema.ts
+
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+[2K[1G[✓] Pulling schema from database...
+[✓] Changes applied

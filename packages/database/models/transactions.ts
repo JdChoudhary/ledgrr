@@ -25,7 +25,6 @@ import { importBatches } from "./import-batches";
 import { merchants } from "./merchants";
 import { recurringRules } from "./recurring-rules";
 import { recurringRuleOccurrences } from "./recurring-rule-occurrences";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 // Transactions are the financial source of truth.
@@ -37,16 +36,16 @@ import { user } from "./auth-schema";
 // Posted financial meaning must never be silently changed: corrections add
 // adjustment/reversal transactions instead (see transaction_adjustments).
 //
-// A cross-space transfer is two transactions linked by
+// A transfer between two accounts is two transactions linked by
 // counterpart_transaction_id.
 export const transactions = pgTable(
   "transactions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
 
     createdBy: text("created_by")
       .notNull()
@@ -67,8 +66,7 @@ export const transactions = pgTable(
     excludedFromRecurring: boolean("excluded_from_recurring").notNull().default(false),
     importBatchId: uuid("import_batch_id"),
 
-    // Self references: a refund is same-space (composite FK below) while a
-    // cross-space transfer counterpart legitimately lives in another space.
+    // Self references: a refund is same-user (composite FK below).
     refundParentId: uuid("refund_parent_id"),
     counterpartTransactionId: uuid("counterpart_transaction_id"),
     // .references(() => transactions.id),
@@ -128,8 +126,8 @@ export const transactions = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    // Enables composite space-scoped foreign keys from child tables.
-    unique("transactions_id_space_id_unique").on(table.id, table.spaceId),
+    // Enables composite user-scoped foreign keys from child tables.
+    unique("transactions_id_user_id_unique").on(table.id, table.userId),
 
     check("transactions_amount_positive", sql`${table.amount} > 0`),
     check("transactions_personal_amount_non_negative", sql`${table.personalAmount} >= 0`),
@@ -165,55 +163,55 @@ export const transactions = pgTable(
       table.accountId,
       table.importFingerprint,
     ),
-    index("transactions_space_date_idx").on(table.spaceId, table.date),
-    index("transactions_space_account_date_idx").on(table.spaceId, table.accountId, table.date),
+    index("transactions_user_date_idx").on(table.userId, table.date),
+    index("transactions_user_account_date_idx").on(table.userId, table.accountId, table.date),
 
-    // Same-space account / category / merchant / recurring / import / goal.
+    // Same-user account / category / merchant / recurring / import / goal.
     foreignKey({
       name: "transactions_account_fkey",
-      columns: [table.accountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.accountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
     foreignKey({
       name: "transactions_destination_account_fkey",
-      columns: [table.destinationAccountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.destinationAccountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
     foreignKey({
       name: "transactions_category_fkey",
-      columns: [table.categoryId, table.spaceId],
-      foreignColumns: [categories.id, categories.spaceId],
+      columns: [table.categoryId, table.userId],
+      foreignColumns: [categories.id, categories.userId],
     }),
     foreignKey({
       name: "transactions_merchant_fkey",
-      columns: [table.merchantId, table.spaceId],
-      foreignColumns: [merchants.id, merchants.spaceId],
+      columns: [table.merchantId, table.userId],
+      foreignColumns: [merchants.id, merchants.userId],
     }),
     foreignKey({
       name: "transactions_recurring_rule_fkey",
-      columns: [table.recurringRuleId, table.spaceId],
-      foreignColumns: [recurringRules.id, recurringRules.spaceId],
+      columns: [table.recurringRuleId, table.userId],
+      foreignColumns: [recurringRules.id, recurringRules.userId],
     }),
     // foreignKey({
     //   name: "transactions_recurring_occurrence_fkey",
-    //   columns: [table.recurringRuleOccurrenceId, table.spaceId],
-    //   foreignColumns: [recurringRuleOccurrences.id, recurringRuleOccurrences.spaceId],
+    //   columns: [table.recurringRuleOccurrenceId, table.userId],
+    //   foreignColumns: [recurringRuleOccurrences.id, recurringRuleOccurrences.userId],
     // }),
     foreignKey({
       name: "transactions_import_batch_fkey",
-      columns: [table.importBatchId, table.spaceId],
-      foreignColumns: [importBatches.id, importBatches.spaceId],
+      columns: [table.importBatchId, table.userId],
+      foreignColumns: [importBatches.id, importBatches.userId],
     }),
     foreignKey({
       name: "transactions_savings_goal_fkey",
-      columns: [table.savingsGoalId, table.spaceId],
-      foreignColumns: [goals.id, goals.spaceId],
+      columns: [table.savingsGoalId, table.userId],
+      foreignColumns: [goals.id, goals.userId],
     }),
-    // Refund parent must live in the same space.
+    // Refund parent must be owned by the same user.
     foreignKey({
       name: "transactions_refund_parent_fkey",
-      columns: [table.refundParentId, table.spaceId],
-      foreignColumns: [table.id, table.spaceId],
+      columns: [table.refundParentId, table.userId],
+      foreignColumns: [table.id, table.userId],
     }),
   ],
 );

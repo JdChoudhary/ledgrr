@@ -32,7 +32,7 @@ const getPath = generatePath("/goals");
 
 const goalResponseSchema = z.object({
   id: z.string(),
-  spaceId: z.string(),
+  userId: z.string(),
   createdBy: z.string(),
   linkedAccountId: z.string().nullable(),
   name: z.string(),

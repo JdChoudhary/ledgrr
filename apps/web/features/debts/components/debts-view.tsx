@@ -42,11 +42,7 @@ import {
 } from "@/components/ui/empty";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupInput,
-  InputGroupAddon,
-} from "@/components/ui/input-group";
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -56,10 +52,11 @@ import {
   useCreateDebt,
   useDebts,
   useSettleDebt,
+  useSettleMutualDebt,
 } from "~/hooks/api/debt";
 import { useSearchUsers } from "~/hooks/api/friendship";
 import { useCreateContact } from "~/hooks/api/contacts";
-import { useSpaces } from "~/hooks/api/space";
+import { useUserSettings } from "~/hooks/api/user-settings";
 import { useSession } from "~/lib/auth-client";
 
 /**
@@ -76,7 +73,10 @@ const fmtMoney = (value: string | number): string =>
     maximumFractionDigits: 2,
   });
 
-const STATUS_BADGE: Record<string, { label: string; variant: "secondary" | "outline" | "destructive" }> = {
+const STATUS_BADGE: Record<
+  string,
+  { label: string; variant: "secondary" | "outline" | "destructive" }
+> = {
   open: { label: "Open", variant: "secondary" },
   partially_settled: { label: "Partially settled", variant: "outline" },
   settled: { label: "Settled", variant: "outline" },
@@ -99,9 +99,7 @@ function SettleDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [amount, setAmount] = React.useState("");
-  const [paidOn, setPaidOn] = React.useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [paidOn, setPaidOn] = React.useState(() => new Date().toISOString().slice(0, 10));
 
   React.useEffect(() => {
     if (open) {
@@ -141,8 +139,7 @@ function SettleDialog({
         <DialogHeader>
           <DialogTitle>Settle with {counterparty}</DialogTitle>
           <DialogDescription>
-            A settlement is a transfer between parties — it is never recorded as
-            income or expense.
+            A settlement is a transfer between parties — it is never recorded as income or expense.
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submit}>
@@ -181,13 +178,7 @@ function SettleDialog({
   );
 }
 
-function InputDate({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function InputDate({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <input
       type="date"
@@ -221,9 +212,7 @@ function CreateDebtDialog({
 
   // "i_owe" -> the other person is the creditor (you owe them);
   // "owed_to_me" -> the other person is the debtor.
-  const [direction, setDirection] = React.useState<"owed_to_me" | "i_owe">(
-    "owed_to_me",
-  );
+  const [direction, setDirection] = React.useState<"owed_to_me" | "i_owe">("owed_to_me");
   const [person, setPerson] = React.useState<DebtPerson>(null);
   const [amount, setAmount] = React.useState("");
   const [dueDate, setDueDate] = React.useState("");
@@ -249,9 +238,7 @@ function CreateDebtDialog({
   }, [open]);
 
   const search = useSearchUsers(
-    open && debouncedQuery.trim().length >= 2
-      ? { query: debouncedQuery.trim() }
-      : undefined,
+    open && debouncedQuery.trim().length >= 2 ? { query: debouncedQuery.trim() } : undefined,
   );
   const results = (search.users ?? []).filter(
     (r) =>
@@ -270,15 +257,10 @@ function CreateDebtDialog({
   const { createContactAsync, isPending: creatingContact } = useCreateContact();
 
   const parsedAmount = Number(amount);
-  const amountValid =
-    amount !== "" && !Number.isNaN(parsedAmount) && parsedAmount > 0;
+  const amountValid = amount !== "" && !Number.isNaN(parsedAmount) && parsedAmount > 0;
   const personValid = person != null;
 
-  const pickPerson = async (result: {
-    kind: "user" | "contact";
-    id: string;
-    name: string;
-  }) => {
+  const pickPerson = async (result: { kind: "user" | "contact"; id: string; name: string }) => {
     setPerson(
       result.kind === "user"
         ? { kind: "user", userId: result.id, name: result.name }
@@ -313,9 +295,7 @@ function CreateDebtDialog({
     if (selfUserId == null || person == null) return;
 
     const otherParty =
-      person.kind === "user"
-        ? { userId: person.userId }
-        : { contactId: person.contactId };
+      person.kind === "user" ? { userId: person.userId } : { contactId: person.contactId };
     // One side is always the actor (a real user) — the service requires it.
     await createDebtAsync({
       creditor: direction === "owed_to_me" ? { userId: selfUserId } : otherParty,
@@ -333,8 +313,7 @@ function CreateDebtDialog({
         <DialogHeader>
           <DialogTitle>New debt</DialogTitle>
           <DialogDescription>
-            A debt is an obligation — it is never recorded as income or
-            expense.
+            A debt is an obligation — it is never recorded as income or expense.
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submit}>
@@ -371,9 +350,7 @@ function CreateDebtDialog({
                 <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
                   {person.name.charAt(0).toUpperCase()}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {person.name}
-                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}</span>
                 {person.kind === "contact" ? (
                   <Badge variant="secondary" className="text-[9px]">
                     contact
@@ -448,9 +425,7 @@ function CreateDebtDialog({
               />
             </InputGroup>
             <FieldError>
-              {amount !== "" && !amountValid
-                ? "Enter an amount greater than zero"
-                : undefined}
+              {amount !== "" && !amountValid ? "Enter an amount greater than zero" : undefined}
             </FieldError>
           </Field>
 
@@ -474,9 +449,7 @@ function CreateDebtDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={creating || creatingContact}>
-              {creating || creatingContact ? (
-                <Loader2Icon className="size-4 animate-spin" />
-              ) : null}
+              {creating || creatingContact ? <Loader2Icon className="size-4 animate-spin" /> : null}
               Record debt
             </Button>
           </DialogFooter>
@@ -492,6 +465,7 @@ function CreateDebtDialog({
 
 function MutualSettleDialog({
   personName,
+  counterpartyUserId,
   theyOwe,
   iOwe,
   currency,
@@ -499,6 +473,7 @@ function MutualSettleDialog({
   onOpenChange,
 }: {
   personName: string;
+  counterpartyUserId: string;
   theyOwe: number;
   iOwe: number;
   currency: string;
@@ -507,9 +482,7 @@ function MutualSettleDialog({
 }) {
   const settleAmount = Math.min(theyOwe, iOwe);
   const [amount, setAmount] = React.useState(String(settleAmount));
-  const [paidOn, setPaidOn] = React.useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [paidOn, setPaidOn] = React.useState(() => new Date().toISOString().slice(0, 10));
 
   React.useEffect(() => {
     if (open) {
@@ -518,9 +491,16 @@ function MutualSettleDialog({
     }
   }, [open, theyOwe, iOwe]);
 
-  const { settleDebt, isPending: settling } = useSettleDebt({
-    onSuccess: () => {
-      toast.success("Mutual settlement recorded");
+  const { settleMutualDebt, isPending: settling } = useSettleMutualDebt({
+    onSuccess: (result) => {
+      const net = Number(result.netAfter);
+      toast.success(
+        Math.abs(net) < 0.00005
+          ? `Cancelled out ${fmtMoney(result.offsetAmount)} — you're all square`
+          : `Cancelled out ${fmtMoney(result.offsetAmount)} — net ${
+              net > 0 ? "they owe you" : "you owe"
+            } ${fmtMoney(Math.abs(net))}`,
+      );
       onOpenChange(false);
     },
     onError: (err) => toast.error(err.message),
@@ -539,8 +519,7 @@ function MutualSettleDialog({
             Settle with {personName}
           </DialogTitle>
           <DialogDescription>
-            Cancel out mutual debts in one action. This reduces both obligations
-            simultaneously.
+            Cancel out mutual debts in one action. This reduces both obligations simultaneously.
           </DialogDescription>
         </DialogHeader>
 
@@ -548,15 +527,11 @@ function MutualSettleDialog({
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-center">
             <p className="text-[11px] text-muted-foreground">They owe you</p>
-            <p className="text-lg font-bold tabular-nums text-emerald-600">
-              {fmtMoney(theyOwe)}
-            </p>
+            <p className="text-lg font-bold tabular-nums text-emerald-600">{fmtMoney(theyOwe)}</p>
           </div>
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-center">
             <p className="text-[11px] text-muted-foreground">You owe them</p>
-            <p className="text-lg font-bold tabular-nums text-amber-600">
-              {fmtMoney(iOwe)}
-            </p>
+            <p className="text-lg font-bold tabular-nums text-amber-600">{fmtMoney(iOwe)}</p>
           </div>
         </div>
 
@@ -601,12 +576,11 @@ function MutualSettleDialog({
           <Button
             disabled={settling || exceedsMax || parsed <= 0}
             onClick={() => {
-              // Settle one direction — the other direction's debt is implicitly
-              // reduced by the user settling the other side manually or via
-              // the same mutual settlement on the opposite debt.
-              // For simplicity, we settle the "they owe you" debt first.
-              settleDebt({
-                debtId: "", // TODO: need actual debt IDs
+              // Paired settlements: the server applies the offset to a debt
+              // they owe you AND a debt you owe them in one transaction, so
+              // both directions shrink by the same amount.
+              settleMutualDebt({
+                counterpartyUserId,
                 amount: parsed,
                 paidOn,
               });
@@ -626,9 +600,7 @@ function MutualSettleDialog({
 // ---------------------------------------------------------------------------
 
 export function DebtsView() {
-  const [direction, setDirection] = React.useState<"all" | "owed_to_me" | "i_owe">(
-    "all",
-  );
+  const [direction, setDirection] = React.useState<"all" | "owed_to_me" | "i_owe">("all");
   const [settleTarget, setSettleTarget] = React.useState<{
     debtId: string;
     counterparty: string;
@@ -637,12 +609,16 @@ export function DebtsView() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [mutualTarget, setMutualTarget] = React.useState<{
     personName: string;
+    counterpartyUserId: string;
     theyOwe: number;
     iOwe: number;
   } | null>(null);
 
-  const spaces = useSpaces({});
-  const currency = spaces.spaces?.[0]?.space.baseCurrency ?? "USD";
+  const { data: sessionUser } = useSession();
+  const selfUserId = sessionUser?.user?.id ?? null;
+
+  const { userSettings } = useUserSettings({});
+  const currency = userSettings?.displayCurrency ?? "USD";
 
   const debts = useDebts({ direction });
 
@@ -652,42 +628,66 @@ export function DebtsView() {
   });
 
   const rows = debts.debts ?? [];
+  // A debt is a receivable only when the *current user* holds the creditor
+  // side — checking that the creditor id merely exists misclassifies every
+  // "I owe" debt whose creditor is another user.
   const owedToMe = rows
-    .filter((r) => r.debt.creditorUserId != null && r.status !== "cancelled")
-    .reduce(
-      (acc, r) =>
-        acc + (r.debt.creditorUserId != null ? Number(r.outstandingAmount) : 0),
-      0,
-    );
-
-  const owedByMe = rows
-    .filter((r) => r.debt.debtorUserId != null && r.status !== "cancelled")
+    .filter((r) => r.debt.creditorUserId === selfUserId && r.status !== "cancelled")
     .reduce((acc, r) => acc + Number(r.outstandingAmount), 0);
 
-  // Detect mutual debts — people who owe you AND you owe them
+  const owedByMe = rows
+    .filter((r) => r.debt.debtorUserId === selfUserId && r.status !== "cancelled")
+    .reduce((acc, r) => acc + Number(r.outstandingAmount), 0);
+
+  // Detect mutual debts — people who owe you AND you owe them. Grouped by
+  // the counterparty's user id (not display name), direction derived against
+  // the current user; contact-only sides can't be netted, so they settle
+  // individually as before.
   const mutualDebts = React.useMemo(() => {
-    const map = new Map<string, { theyOwe: number; iOwe: number; name: string }>();
+    if (selfUserId == null) return [];
+
+    const map = new Map<
+      string,
+      { counterpartyUserId: string; name: string; theyOwe: number; iOwe: number }
+    >();
+
     for (const r of rows) {
       if (r.status === "cancelled" || r.status === "settled") continue;
       const outstanding = Number(r.outstandingAmount);
       if (outstanding <= 0) continue;
 
-      // Determine the counterparty name
-      const name = r.debt.creditorUserId != null ? r.debtorName : r.creditorName;
-      if (!name) continue;
+      let counterpartyUserId: string;
+      let iAmCreditor: boolean;
+      let name: string;
+      if (r.debt.creditorUserId === selfUserId) {
+        iAmCreditor = true;
+        counterpartyUserId = r.debt.debtorUserId ?? "";
+        name = r.debtorName;
+      } else if (r.debt.debtorUserId === selfUserId) {
+        iAmCreditor = false;
+        counterpartyUserId = r.debt.creditorUserId ?? "";
+        name = r.creditorName;
+      } else {
+        continue;
+      }
+      if (!counterpartyUserId || !name) continue;
 
-      const existing = map.get(name) ?? { theyOwe: 0, iOwe: 0, name };
-      if (r.debt.creditorUserId != null) {
-        // They owe you
+      const existing = map.get(counterpartyUserId) ?? {
+        counterpartyUserId,
+        name,
+        theyOwe: 0,
+        iOwe: 0,
+      };
+      if (iAmCreditor) {
         existing.theyOwe += outstanding;
       } else {
-        // You owe them
         existing.iOwe += outstanding;
       }
-      map.set(name, existing);
+      map.set(counterpartyUserId, existing);
     }
+
     return [...map.values()].filter((m) => m.theyOwe > 0 && m.iOwe > 0);
-  }, [rows]);
+  }, [rows, selfUserId]);
 
   if (debts.isPending) {
     return (
@@ -713,8 +713,8 @@ export function DebtsView() {
               </EmptyMedia>
               <EmptyTitle>{emptyLabel}</EmptyTitle>
               <EmptyDescription>
-                Debts appear automatically when you split a transaction, or you
-                can record one directly.
+                Debts appear automatically when you split a transaction, or you can record one
+                directly.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -724,17 +724,14 @@ export function DebtsView() {
       <div className="grid gap-3">
         {list.map((item) => {
           const badge = STATUS_BADGE[item.status] ?? STATUS_BADGE.open;
-          const isReceivable = item.debt.creditorUserId != null;
-          const actionable =
-            item.status === "open" || item.status === "partially_settled";
+          const isReceivable = item.debt.creditorUserId === selfUserId;
+          const actionable = item.status === "open" || item.status === "partially_settled";
           return (
             <Card
               key={item.debt.id}
               className={cn(
                 "py-4",
-                item.status !== "open" &&
-                  item.status !== "partially_settled" &&
-                  "opacity-60",
+                item.status !== "open" && item.status !== "partially_settled" && "opacity-60",
               )}
             >
               <CardContent className="flex items-center gap-3 px-4">
@@ -763,9 +760,7 @@ export function DebtsView() {
                     <Badge variant={badge.variant}>{badge.label}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {item.debt.sourceType === "bill_split"
-                      ? "From a bill split"
-                      : "Direct debt"}
+                    {item.debt.sourceType === "bill_split" ? "From a bill split" : "Direct debt"}
                     {item.debt.notes ? ` · ${item.debt.notes}` : ""}
                     {item.debt.dueDate
                       ? ` · due ${format(new Date(item.debt.dueDate), "MMM d, yyyy")}`
@@ -797,13 +792,7 @@ export function DebtsView() {
                 {actionable ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Debt actions"
-                        />
-                      }
+                      render={<Button variant="ghost" size="icon-sm" aria-label="Debt actions" />}
                     >
                       <MoreHorizontal className="size-4" />
                     </DropdownMenuTrigger>
@@ -812,9 +801,7 @@ export function DebtsView() {
                         onClick={() =>
                           setSettleTarget({
                             debtId: item.debt.id,
-                            counterparty: isReceivable
-                              ? item.debtorName
-                              : item.creditorName,
+                            counterparty: isReceivable ? item.debtorName : item.creditorName,
                             outstanding: item.outstandingAmount,
                           })
                         }
@@ -900,7 +887,7 @@ export function DebtsView() {
             <div className="space-y-2">
               {mutualDebts.map((m) => (
                 <div
-                  key={m.name}
+                  key={m.counterpartyUserId}
                   className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5"
                 >
                   <div className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-bold">
@@ -909,19 +896,22 @@ export function DebtsView() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{m.name}</p>
                     <div className="flex gap-3 text-[11px]">
-                      <span className="text-emerald-600">
-                        They owe: {fmtMoney(m.theyOwe)}
-                      </span>
-                      <span className="text-amber-600">
-                        You owe: {fmtMoney(m.iOwe)}
-                      </span>
+                      <span className="text-emerald-600">They owe: {fmtMoney(m.theyOwe)}</span>
+                      <span className="text-amber-600">You owe: {fmtMoney(m.iOwe)}</span>
                     </div>
                   </div>
                   <Button
                     size="sm"
                     variant="outline"
                     className="shrink-0"
-                    onClick={() => setMutualTarget({ personName: m.name, theyOwe: m.theyOwe, iOwe: m.iOwe })}
+                    onClick={() =>
+                      setMutualTarget({
+                        personName: m.name,
+                        counterpartyUserId: m.counterpartyUserId,
+                        theyOwe: m.theyOwe,
+                        iOwe: m.iOwe,
+                      })
+                    }
                   >
                     <ZapIcon className="size-3.5" />
                     Settle
@@ -935,35 +925,29 @@ export function DebtsView() {
 
       <Tabs
         value={direction}
-        onValueChange={(v) =>
-          setDirection(v as "all" | "owed_to_me" | "i_owe")
-        }
+        onValueChange={(v) => setDirection(v as "all" | "owed_to_me" | "i_owe")}
       >
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="owed_to_me">Owed to you</TabsTrigger>
           <TabsTrigger value="i_owe">You owe</TabsTrigger>
         </TabsList>
-        <TabsContent value="all">
-          {renderList(rows, "No debts yet")}
-        </TabsContent>
+        <TabsContent value="all">{renderList(rows, "No debts yet")}</TabsContent>
         <TabsContent value="owed_to_me">
           {renderList(
-            rows.filter((r) => r.debt.creditorUserId != null),
+            rows.filter((r) => r.debt.creditorUserId === selfUserId),
             "Nobody owes you",
           )}
         </TabsContent>
         <TabsContent value="i_owe">
           {renderList(
-            rows.filter((r) => r.debt.debtorUserId != null),
+            rows.filter((r) => r.debt.debtorUserId === selfUserId),
             "You owe nobody",
           )}
         </TabsContent>
       </Tabs>
 
-      {debts.isError ? (
-        <p className="text-sm text-destructive">Could not load debts</p>
-      ) : null}
+      {debts.isError ? <p className="text-sm text-destructive">Could not load debts</p> : null}
 
       {settleTarget ? (
         <SettleDialog
@@ -981,6 +965,7 @@ export function DebtsView() {
       {mutualTarget ? (
         <MutualSettleDialog
           personName={mutualTarget.personName}
+          counterpartyUserId={mutualTarget.counterpartyUserId}
           theyOwe={mutualTarget.theyOwe}
           iOwe={mutualTarget.iOwe}
           currency={currency}
@@ -991,11 +976,7 @@ export function DebtsView() {
         />
       ) : null}
 
-      <CreateDebtDialog
-        currency={currency}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-      />
+      <CreateDebtDialog currency={currency} open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

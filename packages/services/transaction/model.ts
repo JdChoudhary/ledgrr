@@ -39,7 +39,7 @@ export type CreatableTransactionType = (typeof creatableTransactionTypes)[number
 // -------------------------------------------------------------------
 
 /**
- * A participant is either a real user (friend or space member) or one of the
+ * A participant is either a real user (friend) or one of the
  * creator's contacts (a friend without a Ledgr account), never both.
  *
  * `shareValue` semantics by mode:
@@ -77,11 +77,27 @@ export const billSplitInputSchema = z
 export type BillSplitInput = z.input<typeof billSplitInputSchema>;
 
 // -------------------------------------------------------------------
+// Category splits (Monarch-style: one transaction, several categories)
+// -------------------------------------------------------------------
+
+/**
+ * One line of a transaction's per-category allocation. All lines together
+ * must sum to the transaction amount — that invariant is validated in the
+ * service (not the DB) so the UI can show precise remaining/over amounts.
+ */
+export const categorySplitInputSchema = z.object({
+  categoryId: uuidSchema,
+  amount: positiveMoneySchema(),
+  note: z.string().trim().max(500).nullable().optional(),
+});
+
+export type CategorySplitInput = z.input<typeof categorySplitInputSchema>;
+
+// -------------------------------------------------------------------
 // Create
 // -------------------------------------------------------------------
 
 export const createTransactionInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
 
   type: z.enum(creatableTransactionTypes),
@@ -102,7 +118,7 @@ export const createTransactionInputSchema = z.object({
   categoryId: uuidSchema.nullable().optional(),
   merchantId: uuidSchema.nullable().optional(),
 
-  /** Optional; defaults to the space's base currency (rate = 1). */
+  /** Optional; defaults to the user's base currency (rate = 1). */
   currency: currencyCodeSchema.optional(),
 
   description: z.string().trim().max(2000).nullable().optional(),
@@ -119,6 +135,19 @@ export const createTransactionInputSchema = z.object({
 
   /** Optional allocation layer; produces debts for the other participants. */
   billSplit: billSplitInputSchema.nullable().optional(),
+
+  /**
+   * Allocate the transaction amount across 2+ categories. Each category's
+   * budget/analytics then use its split share instead of the full amount.
+   * Income/expense only, mutually exclusive with `billSplit` and
+   * `categoryId` (the split lines replace the single category).
+   */
+  categorySplits: z
+    .array(categorySplitInputSchema)
+    .min(2)
+    .max(50)
+    .nullable()
+    .optional(),
 });
 
 export type CreateTransactionInput = z.input<typeof createTransactionInputSchema>;
@@ -128,7 +157,6 @@ export type CreateTransactionInput = z.input<typeof createTransactionInputSchema
 // -------------------------------------------------------------------
 
 export const transactionLookupSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   transactionId: uuidSchema,
 });
@@ -136,7 +164,6 @@ export const transactionLookupSchema = z.object({
 export type TransactionLookupInput = z.input<typeof transactionLookupSchema>;
 
 export const deleteTransactionInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   transactionId: uuidSchema,
 });
@@ -144,7 +171,6 @@ export const deleteTransactionInputSchema = z.object({
 export type DeleteTransactionInput = z.input<typeof deleteTransactionInputSchema>;
 
 export const listTransactionsInputSchema = z.object({
-  spaceId: uuidSchema,
   actorUserId: userIdSchema,
   accountId: uuidSchema.nullable().optional(),
   type: z.enum(creatableTransactionTypes).optional(),

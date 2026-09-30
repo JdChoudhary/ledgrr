@@ -80,14 +80,13 @@ function buildData(
 }
 
 type SpendingHeatmapProps = {
-  spaceId: string;
   fmt: (value: number) => string;
 };
 
-export function SpendingHeatmap({ spaceId, fmt }: SpendingHeatmapProps) {
+export function SpendingHeatmap({ fmt }: SpendingHeatmapProps) {
   const [metric, setMetric] = useState<Metric>("cashflow");
   const [year, setYear] = useState(CURRENT_YEAR);
-  const { yearlySeries, isPending } = useAnalyticsYearlySeries({ spaceId, year });
+  const { yearlySeries, isPending } = useAnalyticsYearlySeries({ year });
 
   const availableYears = useMemo(
     () => yearlySeries?.availableYears ?? [CURRENT_YEAR],

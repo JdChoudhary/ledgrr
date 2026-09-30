@@ -16,7 +16,6 @@ export const categoryTypeSchema = z.enum(["income", "expense"]);
 // ------------------------------------------------------------------
 
 export const createCategorySchema = z.object({
-  spaceId: uuidSchema,
   name: categoryName,
   type: categoryTypeSchema,
   groupId: uuidSchema.optional(),
@@ -28,7 +27,6 @@ export const createCategorySchema = z.object({
 
 export const updateCategorySchema = z
   .object({
-    spaceId: uuidSchema,
     categoryId: uuidSchema,
     name: categoryName.optional(),
     type: categoryTypeSchema.optional(),
@@ -49,12 +47,10 @@ export const updateCategorySchema = z
   );
 
 export const categoryLookupSchema = z.object({
-  spaceId: uuidSchema,
   categoryId: uuidSchema,
 });
 
 export const listCategoriesSchema = z.object({
-  spaceId: uuidSchema,
   type: categoryTypeSchema.optional(),
   groupId: uuidSchema.optional(),
   includeArchived: z.boolean().optional().default(false),
@@ -62,7 +58,6 @@ export const listCategoriesSchema = z.object({
 
 export const mergeCategoriesSchema = z
   .object({
-    spaceId: uuidSchema,
     sourceCategoryId: uuidSchema,
     targetCategoryId: uuidSchema,
   })

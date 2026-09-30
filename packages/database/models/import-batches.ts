@@ -12,7 +12,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { importSourceEnum, importStatusEnum } from "./enums";
 import { financialAccounts } from "./financial-accounts";
-import { spaces } from "./spaces";
 import { user } from "./auth-schema";
 
 export const importBatches = pgTable(
@@ -20,9 +19,9 @@ export const importBatches = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    spaceId: uuid("space_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => spaces.id),
+      .references(() => user.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
@@ -48,8 +47,8 @@ export const importBatches = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
-    // Enables the composite space FK from transactions.import_batch_id.
-    unique("import_batches_id_space_id_unique").on(table.id, table.spaceId),
+    // Enables the composite user FK from transactions.import_batch_id.
+    unique("import_batches_id_user_id_unique").on(table.id, table.userId),
 
     check(
       "import_batches_row_counts_reconcile",
@@ -61,8 +60,8 @@ export const importBatches = pgTable(
     check("import_batches_duplicate_rows_non_negative", sql`${table.duplicateRows} >= 0`),
     foreignKey({
       name: "import_batches_account_fkey",
-      columns: [table.accountId, table.spaceId],
-      foreignColumns: [financialAccounts.id, financialAccounts.spaceId],
+      columns: [table.accountId, table.userId],
+      foreignColumns: [financialAccounts.id, financialAccounts.userId],
     }),
   ],
 );
